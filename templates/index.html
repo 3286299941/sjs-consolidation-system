@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+ .dashboard-top {
+ display: grid;
+ grid-template-columns: 1.2fr 1fr;
+ gap: 20px;
+ margin-bottom: 24px;
+ }
+ @media (max-width: 1000px) {
+ .dashboard-top { grid-template-columns: 1fr; }
+ }
+
+ .quick-card, .price-card {
+ background: var(--bg-card);
+ border: 1px solid var(--border);
+ border-radius: var(--radius-lg);
+ padding: 22px;
+ box-shadow: var(--shadow);
+ }
+ .quick-card h3, .price-card h3 {
+ font-size: 15px;
+ font-weight: 600;
+ color: var(--text-primary);
+ margin-bottom: 16px;
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ }
+ .quick-grid {
+ display: grid;
+ grid-template-columns: repeat(4, 1fr);
+ gap: 12px;
+ }
+ .quick-item {
+ background: #1e3a8a;
+ color: #fff;
+ border-radius: 12px;
+ padding: 16px 8px;
+ text-align: center;
+ cursor: pointer;
+ transition: all 0.2s ease;
+ border: 1px solid rgba(30, 58, 138, 0.15);
+ }
+ .quick-item:hover {
+ background: #1e40af;
+ transform: translateY(-2px);
+ box-shadow: 0 8px 20px rgba(30, 58, 138, 0.25);
+ }
+ .quick-item .icon {
+ width: 36px;
+ height: 36px;
+ margin: 0 auto 8px;
+ background: rgba(255,255,255,0.15);
+ border-radius: 8px;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ font-size: 16px;
+ }
+ .quick-item .text {
+ font-size: 13px;
+ font-weight: 500;
+ }
+
+ .price-row {
+ display: flex;
+ gap: 20px;
+ align-items: center;
+ flex-wrap: wrap;
+ }
+ .price-item {
+ display: flex;
+ align-items: center;
+ gap: 10px;
+ }
+ .price-item label {
+ font-weight: 500;
+ color: var(--text-secondary);
+ font-size: 13px;
+ }
+ .price-item input {
+ padding: 8px 12px;
+ background: var(--bg-input);
+ border: 1px solid var(--border);
+ border-radius: var(--radius-sm);
+ width: 100px;
+ text-align: center;
+ color: var(--text-primary);
+ font-size: 13px;
+ transition: all var(--transition);
+ }
+ .price-item input:focus {
+ outline: none;
+ border-color: #1e3a8a;
+ box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+ }
+ .price-item input[readonly] {
+ background: var(--bg-primary);
+ cursor: default;
+ color: var(--text-primary);
+ font-weight: 600;
+ }
+ .price-item .unit {
+ color: var(--text-secondary);
+ font-size: 13px;
+ }
+ .price-actions {
+ display: flex;
+ gap: 10px;
+ margin-top: 16px;
+ }
+ .price-actions .btn {
+ padding: 7px 16px;
+ font-size: 13px;
+ }
+ .price-actions .btn-primary {
+ background: #1e3a8a;
+ color: #fff;
+ border: none;
+ }
+ .price-actions .btn-primary:hover {
+ background: #1e40af;
+ }
+
+ .chart-card {
+ background: var(--bg-card);
+ border: 1px solid var(--border);
+ border-radius: var(--radius-lg);
+ padding: 24px;
+ box-shadow: var(--shadow);
+ }
+ .chart-header {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ margin-bottom: 16px;
+ flex-wrap: wrap;
+ gap: 12px;
+ }
+ .chart-title {
+ font-size: 16px;
+ font-weight: 600;
+ color: var(--text-primary);
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ }
+ .chart-tabs {
+ display: flex;
+ gap: 8px;
+ background: var(--bg-primary);
+ padding: 4px;
+ border-radius: 8px;
+ }
+ .chart-tab {
+ padding: 6px 14px;
+ border-radius: 6px;
+ font-size: 13px;
+ font-weight: 500;
+ color: var(--text-secondary);
+ cursor: pointer;
+ border: none;
+ background: transparent;
+ transition: all 0.2s ease;
+ }
+ .chart-tab:hover {
+ color: var(--text-primary);
+ }
+ .chart-tab.active {
+ background: #1e3a8a;
+ color: #fff;
+ box-shadow: 0 2px 8px rgba(30, 58, 138, 0.2);
+ }
+ .chart-sub {
+ font-size: 12px;
+ color: var(--text-secondary);
+ margin-bottom: 18px;
+ }
+ .chart-wrap {
+ position: relative;
+ height: 420px;
+ }
+ .chart-empty {
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ height: 420px;
+ color: var(--text-muted);
+ font-size: 14px;
+ }
+
+ .logo-bar {
+ display: flex;
+ align-items: center;
+ gap: 14px;
+ margin-bottom: 20px;
+ }
+ .logo-bar img {
+ height: 42px;
+ width: auto;
+ background: #fff;
+ border-radius: 8px;
+ padding: 5px 8px;
+ border: 1px solid var(--border);
+ }
+ .logo-bar .title {
+ font-size: 18px;
+ font-weight: 700;
+ color: var(--text-primary);
+ }
+ .logo-bar .subtitle {
+ font-size: 12px;
+ color: var(--text-secondary);
+ }
+</style>
+
+<div class="logo-bar">
+ <img src="/static/logo.png" alt="SJSCM">
+ <div>
+ <div class="title">速捷集运管理系统</div>
+ <div class="subtitle">SJSCM Consolidation System</div>
+ </div>
+</div>
+
+<div class="dashboard-top">
+ <div class="quick-card">
+ <h3>
+ <span style="display:inline-block;width:4px;height:16px;background:linear-gradient(180deg,#1e3a8a,#f97316);border-radius:2px;"></span>
+ 快速导航
+ </h3>
+ <div class="quick-grid">
+ <div class="quick-item" onclick="location.href='/customers'">
+ <div class="icon">+</div>
+ <div class="text">添加客户</div>
+ </div>
+ <div class="quick-item" onclick="location.href='/inbound'">
+ <div class="icon">IN</div>
+ <div class="text">入库扫描</div>
+ </div>
+ <div class="quick-item" onclick="location.href='/batch'">
+ <div class="icon">B</div>
+ <div class="text">创建批次</div>
+ </div>
+ <div class="quick-item" onclick="location.href='/carton'">
+ <div class="icon">C</div>
+ <div class="text">合箱操作</div>
+ </div>
+ </div>
+ </div>
+
+ <div class="price-card">
+ <h3>
+ <span style="display:inline-block;width:4px;height:16px;background:linear-gradient(180deg,#1e3a8a,#f97316);border-radius:2px;"></span>
+ 单价配置
+ </h3>
+ <div class="price-row">
+ <div class="price-item">
+ <label style="color: #16a34a;">普货单价:</label>
+ <input type="text" id="normal-price" value="***" data-real-value="{{ normal_price }}" readonly>
+ <span class="unit">元/kg</span>
+ </div>
+ <div class="price-item">
+ <label style="color: #dc2626;">敏货单价:</label>
+ <input type="text" id="danger-price" value="***" data-real-value="{{ danger_price }}" readonly>
+ <span class="unit">元/kg</span>
+ </div>
+ </div>
+ <div class="price-actions">
+ <button class="btn btn-secondary" id="unlock-price-btn" onclick="unlockPriceEdit()">解锁修改</button>
+ <button class="btn btn-primary" id="save-price-btn" onclick="savePrices()" style="display: none;">保存</button>
+ </div>
+ </div>
+</div>
+
+<div class="chart-card">
+ <div class="chart-header">
+ <div class="chart-title">
+ <span style="display:inline-block;width:4px;height:16px;background:linear-gradient(180deg,#1e3a8a,#f97316);border-radius:2px;"></span>
+ 发货量统计
+ </div>
+ <div class="chart-tabs">
+ <button class="chart-tab active" data-view="customer" onclick="switchChart('customer')">按客户</button>
+ <button class="chart-tab" data-view="address" onclick="switchChart('address')">按地址</button>
+ <button class="chart-tab" data-view="zip" onclick="switchChart('zip')">按邮编</button>
+ <button class="chart-tab" data-view="batch" onclick="switchChart('batch')">按批次</button>
+ </div>
+ </div>
+ <div class="chart-sub" id="chart-sub">按客户累计入库包裹数排名 Top 15</div>
+ <div class="chart-wrap">
+ <canvas id="shipmentChart"></canvas>
+ </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+ const chartData = {
+ customer: {
+ labels: {{ customer_labels | tojson }},
+ values: {{ customer_values | tojson }},
+ sub: '按客户累计入库包裹数排名 Top 15'
+ },
+ address: {
+ labels: {{ address_labels | tojson }},
+ values: {{ address_values | tojson }},
+ sub: '按收货地址累计入库包裹数排名 Top 15'
+ },
+ zip: {
+ labels: {{ zip_labels | tojson }},
+ values: {{ zip_values | tojson }},
+ sub: '按客户邮编累计入库包裹数排名 Top 15'
+ },
+ batch: {
+ labels: {{ batch_labels | tojson }},
+ values: {{ batch_values | tojson }},
+ sub: '按批次已打包单号数量排名 Top 15'
+ }
+ };
+
+ let chartInstance = null;
+
+ function renderChart(view) {
+ const ctx = document.getElementById('shipmentChart').getContext('2d');
+ const data = chartData[view];
+ const maxValue = data.values.length ? Math.max(...data.values) : 1;
+
+ if (chartInstance) {
+ chartInstance.destroy();
+ }
+
+ document.getElementById('chart-sub').textContent = data.sub;
+
+ const primaryColor = '#1e3a8a';
+ const accentColor = '#f97316';
+
+ chartInstance = new Chart(ctx, {
+ type: 'bar',
+ data: {
+ labels: data.labels,
+ datasets: [{
+ label: '包裹数',
+ data: data.values,
+ backgroundColor: data.values.map((v) => {
+ const ratio = maxValue ? v / maxValue : 0;
+ const r = Math.round(30 + ratio * (249 - 30));
+ const g = Math.round(58 + ratio * (115 - 58));
+ const b = Math.round(138 + ratio * (22 - 138));
+ return `rgba(${r}, ${g}, ${b}, 0.85)`;
+ }),
+ borderColor: data.values.map(() => primaryColor),
+ borderWidth: 1,
+ borderRadius: 6,
+ borderSkipped: false,
+ barPercentage: 0.6,
+ categoryPercentage: 0.75
+ }]
+ },
+ options: {
+ responsive: true,
+ maintainAspectRatio: false,
+ plugins: {
+ legend: { display: false },
+ tooltip: {
+ backgroundColor: 'rgba(30, 58, 138, 0.92)',
+ titleColor: '#fff',
+ bodyColor: '#fff',
+ padding: 10,
+ cornerRadius: 8,
+ callbacks: {
+ label: function(context) {
+ return '包裹数: ' + context.parsed.y;
+ }
+ }
+ }
+ },
+ scales: {
+ x: {
+ grid: { display: false },
+ ticks: {
+ color: 'var(--text-secondary)',
+ font: { size: 11 }
+ }
+ },
+ y: {
+ beginAtZero: true,
+ grid: { color: 'var(--border)' },
+ ticks: {
+ color: 'var(--text-secondary)',
+ font: { size: 11 }
+ }
+ }
+ },
+ animation: {
+ duration: 700,
+ easing: 'easeOutQuart'
+ }
+ }
+ });
+ }
+
+ function switchChart(view) {
+ document.querySelectorAll('.chart-tab').forEach(tab => {
+ tab.classList.toggle('active', tab.dataset.view === view);
+ });
+ renderChart(view);
+ }
+
+ renderChart('customer');
+
+ function unlockPriceEdit() {
+ showSecondaryPasswordModal(() => {
+ const normalInput = document.getElementById('normal-price');
+ const dangerInput = document.getElementById('danger-price');
+ [normalInput, dangerInput].forEach(input => {
+ input.type = 'number';
+ input.value = input.getAttribute('data-real-value');
+ input.removeAttribute('readonly');
+ input.step = '0.1';
+ input.min = '0';
+ input.style.textAlign = '';
+ input.style.letterSpacing = '';
+ input.style.fontWeight = '';
+ });
+ document.getElementById('unlock-price-btn').style.display = 'none';
+ document.getElementById('save-price-btn').style.display = '';
+ showToast('单价已解锁，可以修改', 'success');
+ }, '解锁单价修改');
+ }
+
+ async function savePrices() {
+ const normalInput = document.getElementById('normal-price');
+ const dangerInput = document.getElementById('danger-price');
+ const normalPrice = normalInput.value;
+ const dangerPrice = dangerInput.value;
+
+ try {
+ const result = await apiRequest('/api/price_config', {
+ method: 'POST',
+ body: JSON.stringify({
+ normal_price: parseFloat(normalPrice),
+ danger_price: parseFloat(dangerPrice)
+ })
+ });
+ showToast('单价已保存', 'success');
+ [normalInput, dangerInput].forEach(input => {
+ input.setAttribute('data-real-value', input.value);
+ input.type = 'text';
+ input.value = '***';
+ input.setAttribute('readonly', '');
+ input.style.textAlign = 'center';
+ input.style.letterSpacing = '2px';
+ input.style.fontWeight = 'bold';
+ });
+ document.getElementById('unlock-price-btn').style.display = '';
+ document.getElementById('save-price-btn').style.display = 'none';
+ } catch (e) {
+ showToast('保存失败: ' + (e.message || '未知错误'), 'error');
+ }
+ }
+</script>
+{% endblock %}

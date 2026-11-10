@@ -1,0 +1,2361 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+ @keyframes shake {
+ 0%, 100% { transform: translateX(0); }
+ 25% { transform: translateX(-6px); }
+ 50% { transform: translateX(6px); }
+ 75% { transform: translateX(-4px); }
+ }
+ @keyframes pulse-warning {
+ 0%, 100% { border-color: var(--warning); }
+ 50% { border-color: #dc2626; }
+ }
+ #scan-status.needs-attention {
+ animation: pulse-warning 1.5s ease-in-out infinite;
+ }
+ /* 确认打包按钮 */
+ #create-btn {
+ background: #0d47a1 !important;
+ opacity: 0.5;
+ transition: all 0.2s;
+ }
+ #create-btn:not(:disabled) {
+ background: #0d47a1 !important;
+ opacity: 1;
+ box-shadow: 0 4px 12px rgba(13,71,161,0.3);
+ }
+ #create-btn:not(:disabled):hover {
+ background: #083386 !important;
+ transform: translateY(-1px);
+ box-shadow: 0 6px 16px rgba(13,71,161,0.4);
+ }
+</style>
+<div class="card">
+ <div class="card-title">
+ 打包操作 - {{ customer.name }}
+ {% for sc in secondary_customers %}
+ <span style="font-weight: 600; font-size: 14px; color: #4f46e5; margin-left: 8px; background: #e0e7ff; padding: 4px 10px; border-radius: 6px; border: 1px solid #a5b4fc;">➕ {{ sc.name }}</span>
+ {% endfor %}
+ {% if not secondary_customers %}
+ <button class="btn" onclick="showMergePackModal()" style="padding: 4px 12px; font-size: 12px; background: #0d47a1; color: #fff; border-radius: 6px; margin-left: 12px;">📦 拼单合并</button>
+ {% endif %}
+ <span style="font-weight: normal; font-size: 14px; color: var(--text-secondary);">
+ &nbsp;|&nbsp;
+ {% if slot_info %}
+ 货位:
+ {% for s in slot_info %}
+ <code style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 13px;">{{ s.label }}</code>
+ {% endfor %}
+ {% else %}
+ 客户条码: <code>{{ customer.barcode }}</code>
+ {% endif %}
+ </span>
+ {% if customer.remark %}
+ <span style="font-weight: 700; font-size: 17px; color: #92400e; margin-left: 12px; background: #fde68a; border: 1.5px solid #f59e0b; padding: 6px 14px; border-radius: 6px; box-shadow: 0 1px 3px rgba(245,158,11,0.25);">
+ <span style="font-size: 14px; margin-right: 4px;">⚠️</span>{{ customer.remark }}
+ </span>
+ {% endif %}
+ </div>
+
+ <!-- VIP单独发货模式横幅 -->
+ {% if customer.is_vip %}
+ <div style="background:#ede7f6;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;">
+  ⭐ VIP单独发货模式 — 该客户将独立出票，跳过批次合箱
+ </div>
+ {% endif %}
+
+ <!-- 入库备注醒目提示 -->
+ {% set ns = namespace(remarks=[], abnormals=[]) %}
+ {% for p in packages %}
+ {% if p.customer_remark and p.customer_remark not in ns.remarks %}
+ {% set ns.remarks = ns.remarks + [p.customer_remark] %}
+ {% endif %}
+ {% if p.abnormal_remark and p.abnormal_remark not in ns.abnormals %}
+ {% set ns.abnormals = ns.abnormals + [p.abnormal_remark] %}
+ {% endif %}
+ {% endfor %}
+ {% if ns.remarks or ns.abnormals %}
+ <div style="margin-top: 12px; padding: 10px 15px; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+ {% if ns.remarks %}
+ <div style="background: rgba(245,158,11,0.12); border-left: 4px solid #f59e0b; padding: 6px 12px; border-radius: 4px; font-size: 14px; color: #92400e; font-weight: 600;">
+ 入库备注：{{ ns.remarks | join('；') }}
+ </div>
+ {% endif %}
+ {% if ns.abnormals %}
+ <div style="background: rgba(239,68,68,0.12); border-left: 4px solid #ef4444; padding: 6px 12px; border-radius: 4px; font-size: 14px; color: #991b1b; font-weight: 600;">
+ 异常备注：{{ ns.abnormals | join('；') }}
+ </div>
+ {% endif %}
+ </div>
+ {% endif %}
+
+<!-- 主操作区：四宫格布局 -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+
+ <!-- (1,1) 左上：扫描操作 -->
+ <div>
+ <!-- 单包裹拆分选项 -->
+ <div id="split-option-area" style="margin-bottom: 12px; background: linear-gradient(135deg, rgba(21,101,192,0.05), rgba(21,101,192,0.10)); padding: 10px 15px; border-radius: 8px; border: 2px solid #1565c0; display: flex; align-items: center; gap: 10px;">
+ <input type="checkbox" id="enable-split" onchange="toggleSplitMode()" style="width: 18px; height: 18px; cursor: pointer;">
+ <label for="enable-split" style="font-weight: 600; color: #1565c0; cursor: pointer; margin: 0; font-size: 13px;">
+ 拆分模式：已选包裹打成普货+敏货两箱
+ </label>
+ </div>
+
+ <!-- 二次扫描区 -->
+ <div style="background: linear-gradient(135deg, rgba(21,101,192,0.05), rgba(21,101,192,0.10)); padding: 15px; border-radius: 10px; border: 2px solid #1565c0; margin-bottom: 12px;">
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+ <h3 style="color: #1565c0; margin: 0; font-size: 14px;"> 二次扫描</h3>
+ <div style="background: #1565c0; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px;">
+ <span id="normal-count">0</span>/{{ packages|length }}
+ </div>
+ </div>
+
+ <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+ <input type="text" id="normal-verify-input" placeholder=" 扫描单号确认包裹" onkeydown="handleNormalVerify(event)" style="flex: 1; min-width: 150px; padding: 10px 14px; border: 2px solid #1565c0; border-radius: 6px; font-size: 14px;">
+ <button class="btn" onclick="quickVerifyAll()" style="padding: 10px 15px; font-size: 12px; background: #1565c0; white-space: nowrap;">全扫</button>
+ <button class="btn btn-secondary" onclick="clearSelection()" style="padding: 10px 12px; font-size: 12px; white-space: nowrap;">清空</button>
+ <button class="btn" id="quick-add-btn" onclick="showQuickAddInPack()" style="padding: 10px 12px; font-size: 12px; background: #0d47a1; color: #fff; white-space: nowrap;">漏扫</button>
+ </div>
+
+ <!-- 漏扫录入（默认隐藏） -->
+ <div id="quick-add-inline" style="display:none; margin-top: 8px; padding: 10px; background: #f0f7ff; border: 1px solid #c7d2fe; border-radius: 8px; flex-direction: row; gap: 8px; align-items: center;">
+ <input type="text" id="quick-add-tracking" placeholder="输入漏扫的快递单号" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuickAddInPack();}" style="flex: 1; padding: 8px 12px; border: 1px solid #1565c0; border-radius: 6px; font-size: 14px;">
+ <button class="btn" onclick="submitQuickAddInPack()" style="padding: 8px 16px; background: #0d47a1; color: #fff; font-size: 13px;">提交</button>
+ <button class="btn btn-secondary" onclick="hideQuickAddInPack()" style="padding: 8px 16px; font-size: 13px;">取消</button>
+ </div>
+
+ <!-- 扫描进度条 -->
+ <div style="margin-top: 10px; background: rgba(21,101,192,0.10); border-radius: 8px; height: 6px; overflow: hidden;">
+ <div id="scan-progress" style="height: 100%; background: linear-gradient(90deg, #1565c0, #0d47a1); width: 0%; transition: width 0.3s;"></div>
+ </div>
+ </div>
+
+ <!-- 敏货标记区 -->
+ <div id="danger-scan-section" style="background: linear-gradient(135deg, rgba(239,68,68,0.05), rgba(239,68,68,0.10)); padding: 15px; border-radius: 10px; border: 2px solid #ef4444; opacity: 0.5; pointer-events: none; transition: all 0.3s;">
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+ <h3 style="color: #dc2626; margin: 0; font-size: 14px;"> 敏货标记</h3>
+ <div style="background: #dc2626; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 13px;">
+ <span id="danger-count">0</span>
+ </div>
+ </div>
+
+ <div style="display: flex; gap: 8px; align-items: center;">
+ <input type="text" id="danger-verify-input" placeholder=" 扫描标记敏货" onkeydown="handleDangerVerify(event)" style="flex: 1; padding: 10px 14px; border: 2px solid #ef4444; border-radius: 6px; font-size: 14px;">
+ <button class="btn" onclick="markAllAsDanger()" style="padding: 10px 15px; font-size: 12px; background: #dc2626; white-space: nowrap;">全部敏货</button>
+ </div>
+ </div>
+
+ <!-- 扫描状态 + 普货敏货面板 -->
+ <div id="scan-status" style="padding: 10px; margin-top: 12px; background: rgba(21,101,192,0.08); border-radius: 6px; border: 1px solid rgba(21,101,192,0.3); font-size: 13px;">
+ <div style="font-weight: 600; color: #1565c0; margin-bottom: 3px;">扫描状态</div>
+ <div style="font-size: 12px; color: #1565c0;">已扫描: <span id="status-verified">0</span>/{{ packages|length }} 件</div>
+ </div>
+
+ <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
+ <div id="normal-pack-panel" style="padding: 12px; background: rgba(21,101,192,0.06); border: 2px solid rgba(21,101,192,0.25); border-radius: 8px; text-align: center;">
+ <div style="font-weight: 700; color: #1565c0; margin-bottom: 4px; font-size: 14px;">普货</div>
+ <div style="font-size: 22px; font-weight: bold; color: #1565c0;" id="normal-count-display">0</div>
+ <div style="display: flex; align-items: center; gap: 4px; justify-content: center; margin-top: 4px;">
+ <label style="font-size: 11px;">打成</label>
+ <input type="number" id="normal-pkg-count" min="1" max="20" value="1" onchange="updateDistribution()" style="width: 40px; padding: 5px; border: 1px solid var(--border); border-radius: 4px; text-align: center; font-size: 13px;">
+ <label style="font-size: 11px;">包</label>
+ </div>
+ </div>
+ <div id="danger-pack-panel" style="padding: 12px; background: rgba(239,68,68,0.06); border: 2px solid rgba(239,68,68,0.25); border-radius: 8px; text-align: center;">
+ <div style="font-weight: 700; color: #dc2626; margin-bottom: 4px; font-size: 14px;">敏货</div>
+ <div style="font-size: 22px; font-weight: bold; color: #dc2626;" id="danger-count-display">0</div>
+ <div style="display: flex; align-items: center; gap: 4px; justify-content: center; margin-top: 4px;">
+ <label style="font-size: 11px;">打成</label>
+ <input type="number" id="danger-pkg-count" min="1" max="20" value="1" onchange="updateDistribution()" style="width: 40px; padding: 5px; border: 1px solid var(--border); border-radius: 4px; text-align: center; font-size: 13px;">
+ <label style="font-size: 11px;">包</label>
+ </div>
+ </div>
+ </div>
+</div>
+
+ <!-- (1,2) 右上：包裹列表 -->
+ <div>
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
+ <h3 style="color: var(--accent-hover); margin: 0; font-size: 15px;"> 待处理单号</h3>
+ <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+ <input type="text" id="pkg-track-search" placeholder=" 按单号搜索" oninput="searchPkgByTracking(this.value)" style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; width: 130px;">
+ <button class="btn" onclick="selectByNature('普')" style="padding: 6px 10px; font-size: 12px; background: rgba(16,185,129,0.1); color: #047857; border: 1px solid rgba(16,185,129,0.4);">全选普货</button>
+ <button class="btn" onclick="selectByNature('敏')" style="padding: 6px 10px; font-size: 12px; background: rgba(220,38,38,0.1); color: #b91c1c; border: 1px solid rgba(220,38,38,0.4);">全选敏货</button>
+ <button class="btn btn-secondary" onclick="selectAllVerified()" style="padding: 6px 12px; font-size: 12px;">全选已扫描</button>
+ </div>
+ </div>
+
+ <div id="package-list" style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px;">
+ {% for pkg in packages %}
+ <div class="package-item" id="pkg-{{ pkg.id }}"
+ data-id="{{ pkg.id }}"
+ data-tracking="{{ pkg.tracking_number }}"
+ data-seq="{{ pkg.sequence_no }}"
+ data-is-danger="{{ 'true' if pkg.is_danger else 'false' }}"
+ data-nature="{{ pkg.nature }}"
+ data-status="unverified"
+ style="padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; transition: all 0.2s; background: var(--bg-card); cursor: pointer;"
+ onclick="togglePackageSelection({{ pkg.id }})">
+ <div style="display: flex; justify-content: space-between; align-items: center;">
+ <div style="display: flex; align-items: center; gap: 10px;">
+ <input type="checkbox" id="pkg-check-{{ pkg.id }}" onclick="event.stopPropagation(); togglePackageSelection({{ pkg.id }})" style="width: 16px; height: 16px; cursor: pointer;">
+ <div>
+ <div style="font-weight: 600; font-size: 14px;">{{ pkg.tracking_number }}</div>
+ <div style="font-size: 11px; color: var(--text-secondary);">#{{ pkg.sequence_no }}</div>
+ </div>
+ </div>
+ <div style="display: flex; gap: 6px; align-items: center;" id="pkg-actions-{{ pkg.id }}">
+ <span class="verify-badge" id="badge-{{ pkg.id }}" style="padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--border); color: var(--text-secondary);">未扫描</span>
+ <button class="btn" id="danger-btn-{{ pkg.id }}" onclick="event.stopPropagation(); toggleSingleDanger({{ pkg.id }})" style="display: none; padding: 3px 8px; font-size: 11px; background: #fca5a5; color: #7f1d1d; border: 1px solid #ef4444; border-radius: 4px; white-space: nowrap;">标记敏货</button>
+ <button class="btn" id="danger-cancel-btn-{{ pkg.id }}" onclick="event.stopPropagation(); toggleSingleDanger({{ pkg.id }})" style="display: none; padding: 3px 8px; font-size: 11px; background: #dc2626; color: #fff; border: 1px solid #dc2626; border-radius: 4px; white-space: nowrap;">敏货</button>
+ <span id="select-badge-{{ pkg.id }}" style="display: none; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--accent); color: #fff;">已选</span>
+ </div>
+ </div>
+ </div>
+ {% endfor %}
+ </div>
+
+ <!-- 打包预览表格 + 确认按钮 -->
+ <div id="pack-preview" style="border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-top: 12px; background: var(--bg-card); font-size: 12px;">
+ <table id="pack-preview-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+ <thead><tr><th>性质</th><th>包数</th><th>件数</th><th>约重</th></tr></thead>
+ <tbody id="pack-preview-body"></tbody>
+ </table>
+ </div>
+ <!-- 兼容旧代码的隐藏预览区 -->
+ <div id="distribution-preview" style="display: none;"></div>
+
+<!-- 隐藏的批次选择器：从待打包确认传入的批次ID，确保打包记录继承批次 -->
+<input type="hidden" id="batch-select" value="{{ assigned_batch_id or '' }}">
+
+<div style="display: flex; gap: 10px; margin-top: 12px;">
+ <button id="hang-btn" onclick="hangScan()" style="flex: 1; padding: 12px; color: #1565c0; background: rgba(21,101,192,0.08); border: 1px solid rgba(21,101,192,0.3); border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+ 挂起（稍后继续）
+ </button>
+ {% if is_vip_solo %}
+ <button id="vip-solo-btn" onclick="submitVipSoloPack()" style="flex: 2; padding: 12px; color: #92400e; background: #fbbf24; border: 1px solid #f59e0b; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(245,158,11,0.3);">
+  VIP单独打包
+ </button>
+ {% else %}
+ <button id="create-btn" onclick="createPacked()" disabled style="flex: 2; padding: 12px; color: #fff; background: #1565c0; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer;">
+  确认打包
+ </button>
+ {% endif %}
+ </div>
+</div>
+
+ <!-- (2,1) 左下：空 -->
+ <div></div>
+
+ <!-- (2,2) 右下：空 -->
+ <div></div>
+ </div>
+ </div>
+ </div>
+ </div>
+</div>
+
+<!-- 发货明细填写弹窗 -->
+<div class="modal" id="detail-modal">
+ <div class="modal-content" style="max-width: 750px;">
+ <div class="modal-title">填写发货明细</div>
+ <form id="detail-form">
+ <input type="hidden" id="packed-ids">
+ <input type="hidden" id="package-serials">
+
+ <!-- 包裹预览 -->
+ <div class="form-group">
+ <label>包裹预览</label>
+ <div id="label-preview" style="padding: 15px; background: var(--bg-input); border-radius: 8px; font-family: monospace;"></div>
+ </div>
+
+ <!-- 多包裹分别填写 -->
+ <div id="multi-packages-input">
+ <!-- 动态生成每个包裹的输入区域 -->
+ </div>
+
+ <!-- 统一内容物描述（可选） -->
+ <div class="form-group">
+ <label>统一内容物描述（留空则各包裹单独填写）</label>
+ <textarea id="contents-description" rows="2" placeholder="可选：统一填写所有包裹的内容物" oninput="updateSaveBtnState()"></textarea>
+ </div>
+
+ <!-- 快捷按钮 -->
+ <div style="margin-top: 10px; display: flex; gap: 10px;">
+ <button type="button" class="btn btn-secondary" style="padding: 8px 15px; font-size: 13px;" onclick="copyFirstToAll()"> 复制第一栏到全部</button>
+ </div>
+ </form>
+ <div class="modal-footer">
+ <button class="btn btn-secondary" onclick="closeDetailModal()">取消</button>
+ <button class="btn" onclick="saveAndPrint()" id="save-print-btn" style="background: var(--success);"> 保存并打印标签</button>
+ </div>
+ </div>
+</div>
+
+<!-- 现有打包记录选择弹窗 -->
+<div class="modal" id="existing-packed-modal">
+ <div class="modal-content" style="max-width: 680px;">
+ <div class="modal-title"> 检测到该客户在此批次已有打包记录</div>
+ <div style="margin-bottom: 16px; padding: 12px; background: rgba(217,119,6,0.08); border-radius: 8px; border: 1px solid var(--warning);">
+ <span style="color: #d97706; font-size: 13px;">请选择操作方式：将新包裹<strong>追加</strong>到现有某个打包记录，或<strong>全部重新打包</strong>（保留现有记录，另建新包裹）</span>
+ </div>
+
+ <!-- 现有记录列表 -->
+ <div id="existing-records-list" style="max-height: 320px; overflow-y: auto; margin-bottom: 16px;"></div>
+
+ <!-- 追加目标选择 -->
+ <div id="append-target-area" style="display: none; padding: 12px; background: rgba(21,101,192,0.06); border: 1px solid #1565c0; border-radius: 8px; margin-bottom: 16px;">
+ <div style="font-weight: 600; color: #1565c0; margin-bottom: 8px;"> 已选择追加到：</div>
+ <div id="append-target-info" style="font-size: 14px;"></div>
+ </div>
+
+ <div class="modal-footer" style="justify-content: space-between;">
+ <button class="btn btn-secondary" onclick="closeExistingModal()">取消</button>
+ <div style="display: flex; gap: 10px;">
+ <button class="btn" onclick="proceedRepack()"
+ style="background: var(--accent);">
+ 全部重新打包（另建新包裹）
+ </button>
+ <button class="btn" id="confirm-append-btn" onclick="proceedAppend()"
+ style="background: var(--success); display: none;">
+ 确认追加到所选包裹
+ </button>
+ </div>
+ </div>
+ </div>
+</div>
+
+<!-- 打印队列弹窗 -->
+<div class="modal" id="print-queue-modal">
+ <div class="modal-content" style="max-width: 520px;">
+ <div class="modal-title"> 打印标签</div>
+ <div style="padding: 20px;">
+ <div id="print-queue-info" style="text-align: center; margin-bottom: 20px;">
+ <div style="font-size: 48px; margin-bottom: 15px; color: #1565c0;"></div>
+ <div id="print-queue-count" style="font-size: 20px; font-weight: bold; color: #1565c0;"></div>
+ </div>
+
+ <!-- 打印进度 -->
+ <div style="margin-bottom: 15px;">
+ <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+ <span>打印进度</span>
+ <span id="print-current">0 / 0</span>
+ </div>
+ <div style="background: var(--border); border-radius: 10px; height: 12px; overflow: hidden;">
+ <div id="print-progress-bar" style="height: 100%; background: linear-gradient(90deg, #1565c0, #0d47a1); width: 0%; transition: width 0.3s;"></div>
+ </div>
+ </div>
+
+ <div id="print-current-label" style="text-align: center; padding: 15px; background: rgba(21,101,192,0.08); border-radius: 8px; font-size: 16px; font-weight: 600; color: #1565c0; margin-bottom: 15px;"></div>
+
+ <div id="print-action-buttons" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+ <button class="btn" id="btn-print-current" onclick="printCurrentLabel()" style="background: #1565c0; padding: 12px 24px; font-size: 15px;"> 打印此标签</button>
+ <button class="btn btn-secondary" id="btn-next-label" onclick="nextPrintLabel()" style="padding: 12px 24px; font-size: 15px; border: 2px solid #1565c0; color: #1565c0; background: #fff;"> 已打印，下一张</button>
+ <button class="btn btn-danger" onclick="cancelPrintQueue()" style="padding: 12px 24px; font-size: 15px;">取消全部</button>
+ </div>
+
+ <div id="print-finish-area" style="display: none; text-align: center; margin-top: 15px;">
+ <div style="color: #1565c0; font-weight: 600; margin-bottom: 10px;"> 所有标签已处理完毕</div>
+ <button class="btn" onclick="finishPrintQueue()" style="background: #1565c0; padding: 12px 30px; font-size: 15px;">完成并关闭</button>
+ </div>
+ </div>
+ </div>
+</div>
+
+<style>
+ .verify-badge {
+ font-weight: 600;
+ }
+ .verify-badge.unverified {
+ background: var(--border);
+ color: var(--text-secondary);
+ }
+ .verify-badge.verified {
+ background: rgba(21,101,192,0.10);
+ color: #1565c0;
+ }
+ .verify-badge.danger {
+ background: rgba(239,68,68,0.12);
+ color: #dc2626;
+ }
+ .package-item.verified {
+ border-color: #1565c0 !important;
+ background: rgba(21,101,192,0.05) !important;
+ }
+ .package-item.danger {
+ border-color: #ef4444 !important;
+ background: rgba(239,68,68,0.06) !important;
+ }
+ .package-item.selected {
+ border-color: var(--accent) !important;
+ background: rgba(99,102,241,0.1) !important;
+ box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
+ }
+</style>
+
+<script>
+ let verifiedPackages = []; // 已二次扫描的包裹
+ let dangerPackages = []; // 标记为敏货的包裹
+ let selectedPackages = []; // 手动选择的包裹
+ let autoSubmitMode = false; // 自动提交模式
+ let splitMode = false; // 单包裹拆分模式
+ let totalPackages = {{ packages|length }};
+ let secondaryIds = {{ secondary_customers | map(attribute='id') | list | tojson }}; // 拼单次客户ID列表
+
+ // 现有打包弹窗状态
+ let _pendingPackPayload = null; // 待处理的打包参数（allPackages, batchId 等）
+ let _selectedAppendTarget = null; // 已选中追加目标 packed record id
+
+ // 初始化
+ document.querySelectorAll('.package-item').forEach(item => {
+ const pkgId = parseInt(item.id.replace('pkg-', ''));
+ const isDanger = item.dataset.isDanger === 'true';
+ const tracking = item.dataset.tracking;
+ const seq = parseInt(item.dataset.seq) || 0;
+
+ // 退回重打包的包裹：保留之前的货物性质标记
+ if (isDanger) {
+ // 自动标记为已验证（之前批次已扫描过）
+ if (!verifiedPackages.some(p => p.id === pkgId)) {
+ verifiedPackages.push({ id: pkgId, tracking: tracking, seq: seq });
+ }
+ // 自动标记为敏货（保留之前的敏货标记，无需重新扫描）
+ if (!dangerPackages.some(p => p.id === pkgId)) {
+ dangerPackages.push({ id: pkgId, tracking: tracking, seq: seq });
+ }
+ updatePackageStatus(pkgId, 'danger');
+ } else {
+ updatePackageStatus(pkgId, 'unverified');
+ }
+ });
+
+ // 如果有预标记的敏货，启用敏货扫描区
+ if (dangerPackages.length > 0) {
+ document.getElementById('danger-scan-section').style.opacity = '1';
+ document.getElementById('danger-scan-section').style.pointerEvents = 'auto';
+ updateScanCounts();
+ updateDistribution();
+ }
+
+ // 自动提交防抖计时器
+ let autoSubmitTimer = null;
+ const AUTO_SUBMIT_DELAY = 300; // 300ms防抖，适合扫码枪
+
+ // 切换自动提交模式
+ function toggleAutoSubmit() {
+ autoSubmitMode = document.getElementById('auto-submit-mode').checked;
+ const input1 = document.getElementById('normal-verify-input');
+ const input2 = document.getElementById('danger-verify-input');
+ if (autoSubmitMode) {
+ input1.placeholder = ' 扫码自动确认（无需按Enter）';
+ input2.placeholder = ' 扫码自动标记敏货';
+ } else {
+ input1.placeholder = ' 扫描快递单号确认包裹存在';
+ input2.placeholder = ' 扫描需要标记为敏货的包裹';
+ }
+ }
+
+ // 单包裹拆分模式
+ function toggleSplitMode() {
+ splitMode = document.getElementById('enable-split').checked;
+ const dangerSection = document.getElementById('danger-scan-section');
+ if (splitMode) {
+ // 拆分模式下所有包裹参与每个包，无需敏货标记
+ dangerSection.style.display = 'none';
+ dangerPackages = [];
+ document.getElementById('danger-count').textContent = '0';
+ showToast('已开启拆分模式：所有已扫描包裹将同时打包为普货+敏货', 'info');
+ } else {
+ dangerSection.style.display = '';
+ showToast('已关闭拆分模式', 'info');
+ }
+ updateDistribution();
+ }
+
+ // 处理输入（手动Enter或自动防抖提交）
+ async function handleNormalVerify(event) {
+ const input = event.target;
+ const tracking = input.value.trim();
+ if (!tracking) return;
+
+ if (event.key === 'Enter') {
+ // 手动模式按Enter直接提交
+ await verifyPackage(tracking, 'verify');
+ input.value = '';
+ } else if (autoSubmitMode) {
+ // 自动模式：防抖提交
+ if (autoSubmitTimer) clearTimeout(autoSubmitTimer);
+ autoSubmitTimer = setTimeout(async () => {
+ const currentTracking = input.value.trim();
+ if (currentTracking) {
+ await verifyPackage(currentTracking, 'verify');
+ input.value = '';
+ }
+ }, AUTO_SUBMIT_DELAY);
+ }
+ }
+
+ async function handleDangerVerify(event) {
+ const input = event.target;
+ const tracking = input.value.trim();
+ if (!tracking) return;
+
+ if (event.key === 'Enter') {
+ await verifyPackage(tracking, 'danger');
+ input.value = '';
+ } else if (autoSubmitMode) {
+ if (autoSubmitTimer) clearTimeout(autoSubmitTimer);
+ autoSubmitTimer = setTimeout(async () => {
+ const currentTracking = input.value.trim();
+ if (currentTracking) {
+ await verifyPackage(currentTracking, 'danger');
+ input.value = '';
+ }
+ }, AUTO_SUBMIT_DELAY);
+ }
+ }
+
+ // 快速全扫
+ async function quickVerifyAll() {
+ if (isActionLocked()) return;
+ if (verifiedPackages.length >= totalPackages) {
+ showToast('所有包裹已扫描完成', 'info');
+ return;
+ }
+ lockAction();
+
+ try {
+ // 获取所有未扫描的包裹
+ const unverified = document.querySelectorAll('.package-item[data-status="unverified"]');
+ if (unverified.length === 0) {
+ showToast('没有待扫描的包裹', 'info');
+ return;
+ }
+
+ let scanned = 0;
+ for (const item of unverified) {
+ const tracking = item.dataset.tracking;
+ if (!verifiedPackages.some(p => p.tracking === tracking)) {
+ await verifyPackage(tracking, 'verify');
+ scanned++;
+ await new Promise(r => setTimeout(r, 100)); // 防止请求过快
+ }
+ }
+ showToast(`快速扫描完成：${scanned} 件`, 'success');
+ } catch (e) {
+ showToast(e.message || '扫描失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ // 更新扫描计数和状态
+ function updateScanCounts() {
+ try {
+ document.getElementById('normal-count').textContent = verifiedPackages.length;
+ document.getElementById('danger-count').textContent = dangerPackages.length;
+ document.getElementById('status-verified').textContent = verifiedPackages.length;
+
+ // 更新普货/敏货面板
+ const normalItems = verifiedPackages.filter(p => !dangerPackages.some(d => d.id === p.id)).length;
+ const dangerItems = dangerPackages.length;
+ document.getElementById('normal-count-display').textContent = normalItems;
+ document.getElementById('danger-count-display').textContent = dangerItems;
+
+ // 更新进度条
+ const progress = totalPackages > 0 ? (verifiedPackages.length / totalPackages * 100) : 0;
+ document.getElementById('scan-progress').style.width = progress + '%';
+
+ // 更新扫描状态提示
+ const statusDiv = document.getElementById('scan-status');
+ const dangerSection = document.getElementById('danger-scan-section');
+
+ if (verifiedPackages.length === 0) {
+ statusDiv.style.background = 'rgba(21,101,192,0.08)';
+ statusDiv.innerHTML = `
+ <div style="font-weight: 600; color: #1565c0; margin-bottom: 5px;"> 请先完成二次扫描</div>
+ <div style="font-size: 13px; color: #1565c0;">已扫描: <span id="status-verified">${verifiedPackages.length}</span> / ${totalPackages} 件</div>
+ `;
+ dangerSection.style.opacity = '0.5';
+ dangerSection.style.pointerEvents = 'none';
+ } else if (verifiedPackages.length < totalPackages) {
+ statusDiv.style.background = 'rgba(21,101,192,0.08)';
+ statusDiv.innerHTML = `
+ <div style="font-weight: 600; color: #1565c0; margin-bottom: 5px;"> 扫描中... 请继续扫描剩余包裹</div>
+ <div style="font-size: 13px; color: #1565c0;">已扫描: <span id="status-verified">${verifiedPackages.length}</span> / ${totalPackages} 件</div>
+ `;
+ dangerSection.style.opacity = '0.5';
+ dangerSection.style.pointerEvents = 'none';
+ } else {
+ statusDiv.style.background = 'rgba(21,101,192,0.12)';
+ statusDiv.innerHTML = `
+ <div style="font-weight: 600; color: #1565c0; margin-bottom: 5px;"> 二次扫描完成！可以标记敏货或直接打包</div>
+ <div style="font-size: 13px; color: #0d47a1;">已扫描: <span id="status-verified">${verifiedPackages.length}</span> / ${totalPackages} 件</div>
+ `;
+ dangerSection.style.opacity = '1';
+ dangerSection.style.pointerEvents = 'auto';
+ document.getElementById('danger-verify-input').style.background = 'var(--bg-card)';
+ }
+ } catch(e) { console.error('updateScanCounts', e); }
+ }
+
+ // ====== 二次扫描全部完成：提示音+语音播报（2026-08-20）======
+ function playCompleteChime() {
+  try {
+    // 复用全局 AudioContext（与扫描音效 playBeep 共享，保证已激活）
+    if (!window._audioCtx) window._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = window._audioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const master = ctx.createGain();
+    master.gain.value = 1.0;
+    master.connect(ctx.destination);
+    const t = ctx.currentTime + 0.35;      // 与扫描成功音效错开 350ms
+    // 四音上行琶音 C6 → E6 → G6 → C7（明亮华彩，明显区别于扫描"叮咚"）
+    [[1046.5, 0], [1318.5, 0.13], [1568, 0.26], [2093, 0.39]].forEach(([freq, delay]) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = 'triangle';
+      g.gain.setValueAtTime(0.0001, t + delay);
+      g.gain.exponentialRampToValueAtTime(0.7, t + delay + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + delay + 0.22);
+      osc.connect(g); g.connect(master);
+      osc.start(t + delay); osc.stop(t + delay + 0.25);
+    });
+  } catch(e) { console.error('playCompleteChime', e); }
+ }
+
+ function speakComplete(text) {
+  try {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();      // 打断之前的播报
+    const u = new SpeechSynthesisUtterance(text || '已完成');
+    u.lang = 'zh-CN';
+    u.rate = 1.0;
+    u.pitch = 1.0;
+    u.volume = 1.0;
+    window.speechSynthesis.speak(u);
+  } catch(e) { console.error('speakComplete', e); }
+ }
+
+ function onAllPackagesVerified() {
+  playCompleteChime();
+  speakComplete('已完成');
+ }
+
+ // 验证包裹并标记类型
+ async function verifyPackage(tracking, type) {
+ try {
+ const pkgItem = document.querySelector(`[data-tracking="${tracking}"]`);
+ if (!pkgItem) {
+ showToast('包裹不存在或不属于该客户', 'error');
+ if (typeof playBeep === 'function') playBeep('error');
+ return;
+ }
+
+ const pkgId = parseInt(pkgItem.dataset.id);
+
+ if (type === 'verify') {
+ // 二次扫描
+ if (verifiedPackages.some(p => p.id === pkgId)) {
+ showToast('该包裹已二次扫描', 'warning');
+ if (typeof playBeep === 'function') playBeep('warning');
+ return;
+ }
+
+ verifiedPackages.push({
+ id: pkgId,
+ tracking: tracking,
+ seq: parseInt(pkgItem.dataset.seq)
+ });
+
+ // 更新UI
+ updatePackageStatus(pkgId, 'verified');
+ // 自动选中
+ if (!selectedPackages.includes(pkgId)) {
+ selectedPackages.push(pkgId);
+ updatePackageSelectionUI(pkgId, true);
+ }
+ showToast(` ${tracking} 已确认`, 'success');
+ if (typeof playBeep === 'function') playBeep('success');
+
+ // 全部扫完时播放完成提示音+语音（延迟400ms，与扫描成功音效错开，避免听不清）
+ if (verifiedPackages.length === totalPackages) {
+ setTimeout(onAllPackagesVerified, 400);
+ }
+
+ } else if (type === 'danger') {
+ // 敏货标记
+ if (!verifiedPackages.some(p => p.id === pkgId)) {
+ showToast('请先对该包裹进行二次扫描', 'error');
+ if (typeof playBeep === 'function') playBeep('error');
+ return;
+ }
+
+ if (dangerPackages.some(p => p.id === pkgId)) {
+ // 取消敏货标记
+ dangerPackages = dangerPackages.filter(p => p.id !== pkgId);
+ updatePackageStatus(pkgId, 'verified');
+ showToast(`已取消敏货标记: ${tracking}`, 'info');
+ } else {
+ dangerPackages.push({
+ id: pkgId,
+ tracking: tracking,
+ seq: parseInt(pkgItem.dataset.seq)
+ });
+ updatePackageStatus(pkgId, 'danger');
+ showToast(` ${tracking} 已标记为敏货`, 'success');
+ if (typeof playBeep === 'function') playBeep('success');
+ }
+ }
+
+ updateScanCounts();
+ updateDistribution();
+ } catch(e) { console.error('verifyPackage', e); showToast('扫描失败: ' + (e.message || ''), 'error'); }
+ }
+
+ // 更新包裹状态显示
+ function updatePackageStatus(pkgId, status) {
+ const pkgItem = document.getElementById(`pkg-${pkgId}`);
+ const badge = document.getElementById(`badge-${pkgId}`);
+ const dangerBtn = document.getElementById(`danger-btn-${pkgId}`);
+ const dangerCancelBtn = document.getElementById(`danger-cancel-btn-${pkgId}`);
+
+ pkgItem.dataset.status = status;
+ pkgItem.classList.remove('verified', 'danger');
+ badge.classList.remove('unverified', 'verified', 'danger');
+
+ if (status === 'verified') {
+ pkgItem.classList.add('verified');
+ badge.classList.add('verified');
+ badge.textContent = '已确认';
+ // 显示标记敏货按钮
+ if (dangerBtn) dangerBtn.style.display = 'inline-block';
+ if (dangerCancelBtn) dangerCancelBtn.style.display = 'none';
+ } else if (status === 'danger') {
+ pkgItem.classList.add('danger');
+ badge.classList.add('danger');
+ badge.textContent = '敏货';
+ // 显示取消敏货按钮
+ if (dangerBtn) dangerBtn.style.display = 'none';
+ if (dangerCancelBtn) dangerCancelBtn.style.display = 'inline-block';
+ } else {
+ badge.classList.add('unverified');
+ badge.textContent = '未扫描';
+ // 隐藏按钮
+ if (dangerBtn) dangerBtn.style.display = 'none';
+ if (dangerCancelBtn) dangerCancelBtn.style.display = 'none';
+ }
+ }
+
+ // 切换包裹选择
+ function togglePackageSelection(pkgId) {
+ const idx = selectedPackages.indexOf(pkgId);
+ if (idx > -1) {
+ selectedPackages.splice(idx, 1);
+ updatePackageSelectionUI(pkgId, false);
+ } else {
+ // 检查是否已二次扫描
+ if (!verifiedPackages.some(p => p.id === pkgId)) {
+ showToast('请先进行二次扫描', 'error');
+ return;
+ }
+ selectedPackages.push(pkgId);
+ updatePackageSelectionUI(pkgId, true);
+ }
+ updateDistribution();
+ }
+
+ function updatePackageSelectionUI(pkgId, selected) {
+ const pkgItem = document.getElementById(`pkg-${pkgId}`);
+ const checkBox = document.getElementById(`pkg-check-${pkgId}`);
+ const selectBadge = document.getElementById(`select-badge-${pkgId}`);
+
+ checkBox.checked = selected;
+ if (selected) {
+ pkgItem.classList.add('selected');
+ selectBadge.style.display = 'inline-block';
+ } else {
+ pkgItem.classList.remove('selected');
+ selectBadge.style.display = 'none';
+ }
+ }
+
+ // 全选已扫描的包裹
+ function selectAllVerified() {
+ verifiedPackages.forEach(pkg => {
+ if (!selectedPackages.includes(pkg.id)) {
+ selectedPackages.push(pkg.id);
+ updatePackageSelectionUI(pkg.id, true);
+ }
+ });
+ showToast(`已选中 ${selectedPackages.length} 件包裹`, 'success');
+ updateDistribution();
+ }
+
+ // 按单号搜索（仅筛选显示，不改变已选中状态）
+ function searchPkgByTracking(val) {
+ const q = (val || '').trim().toLowerCase();
+ document.querySelectorAll('.package-item').forEach(el => {
+ const t = (el.getAttribute('data-tracking') || '').toLowerCase();
+ el.style.display = (!q || t.includes(q)) ? '' : 'none';
+ });
+ }
+
+ // 按货物性质全选
+ function selectByNature(nature) {
+ const items = document.querySelectorAll(`.package-item[data-nature="${nature}"]`);
+ let added = 0;
+ items.forEach(el => {
+ const id = parseInt(el.getAttribute('data-id'));
+ if (!selectedPackages.includes(id)) {
+ selectedPackages.push(id);
+ added++;
+ }
+ updatePackageSelectionUI(id, true);
+ });
+ showToast(`已新增选中 ${added} 件 ${nature}货，共 ${selectedPackages.length} 件`, 'success');
+ updateDistribution();
+ }
+
+ // 单包裹标记/取消敏货
+ function toggleSingleDanger(pkgId) {
+ const pkgItem = document.getElementById(`pkg-${pkgId}`);
+ const tracking = pkgItem.dataset.tracking;
+ const seq = parseInt(pkgItem.dataset.seq) || 0;
+
+ // 检查是否已扫描
+ if (!verifiedPackages.some(p => p.id === pkgId)) {
+ showToast('请先对该包裹进行二次扫描', 'error');
+ return;
+ }
+
+ if (dangerPackages.some(p => p.id === pkgId)) {
+ // 取消敏货标记
+ dangerPackages = dangerPackages.filter(p => p.id !== pkgId);
+ updatePackageStatus(pkgId, 'verified');
+ showToast(`已取消敏货标记`, 'info');
+ } else {
+ // 标记为敏货
+ dangerPackages.push({ id: pkgId, tracking: tracking, seq: seq });
+ updatePackageStatus(pkgId, 'danger');
+ showToast(`已标记为敏货`, 'success');
+ }
+
+ updateScanCounts();
+ updateDistribution();
+ }
+
+ // 标记全部为敏货
+ async function markAllAsDanger() {
+ if (verifiedPackages.length === 0) {
+ showToast('请先进行二次扫描', 'error');
+ return;
+ }
+ if (dangerPackages.length >= verifiedPackages.length) {
+ showToast('所有已扫描包裹已标记为敏货', 'info');
+ return;
+ }
+
+ for (const pkg of verifiedPackages) {
+ if (!dangerPackages.some(p => p.id === pkg.id)) {
+ dangerPackages.push(pkg);
+ updatePackageStatus(pkg.id, 'danger');
+ }
+ }
+ showToast(`已将 ${verifiedPackages.length} 件标记为敏货`, 'success');
+ updateScanCounts();
+ updateDistribution();
+ }
+
+ // 清空选择
+ function clearSelection() {
+ verifiedPackages = [];
+ dangerPackages = [];
+ selectedPackages = [];
+ updateScanCounts();
+ updateDistribution();
+
+ // 重置所有包裹UI
+ document.querySelectorAll('.package-item').forEach(item => {
+ const pkgId = parseInt(item.dataset.id);
+ updatePackageStatus(pkgId, 'unverified');
+ updatePackageSelectionUI(pkgId, false);
+ });
+
+ showToast('已清空选择', 'info');
+ }
+
+ // 更新分配预览 - 同时显示普货和敏货的分配
+ function updateDistribution() {
+ // VIP 单独发货模式：只更新 VIP 按钮，create-btn 不存在
+ const vipBtnCheck = document.getElementById('vip-solo-btn');
+ const createBtnCheck = document.getElementById('create-btn');
+ if (vipBtnCheck && !createBtnCheck) {
+ const allScanned = verifiedPackages.length === totalPackages && totalPackages > 0;
+ vipBtnCheck.disabled = !allScanned;
+ vipBtnCheck.style.opacity = allScanned ? '1' : '0.5';
+ vipBtnCheck.textContent = allScanned ? 'VIP单独打包' : `需先扫完所有 ${totalPackages} 件`;
+ return;
+ }
+ if (!createBtnCheck) return;
+
+ const normalCount = parseInt(document.getElementById('normal-pkg-count').value) || 1;
+ const dangerCount = parseInt(document.getElementById('danger-pkg-count').value) || 1;
+ const preview = document.getElementById('distribution-preview');
+
+ // 拆分模式：直接用 count 输入控制
+ if (splitMode) {
+ if (verifiedPackages.length === 0) {
+ if (preview) preview.innerHTML = `<span style="color: #0d47a1;"> 请先完成二次扫描</span>`;
+ document.getElementById('create-btn').disabled = true;
+ document.getElementById('create-btn').textContent = '确认打包';
+ const tbody = document.getElementById('pack-preview-body');
+ if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="padding:8px;text-align:center;color:var(--text-muted);">请先完成二次扫描</td></tr>`;
+ return;
+ }
+ const splitNormal = parseInt(document.getElementById('normal-pkg-count').value) || 0;
+ const splitDanger = parseInt(document.getElementById('danger-pkg-count').value) || 0;
+ if (splitNormal === 0 && splitDanger === 0) {
+ document.getElementById('create-btn').disabled = true;
+ document.getElementById('create-btn').textContent = '请指定打包数量';
+ const tbody = document.getElementById('pack-preview-body');
+ if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="padding:8px;text-align:center;color:var(--text-muted);">请设置普货/敏货打包数量</td></tr>`;
+ return;
+ }
+ const parts = [];
+ if (splitNormal > 0) parts.push(`普货${verifiedPackages.length}件×${splitNormal}包`);
+ if (splitDanger > 0) parts.push(`敏货${verifiedPackages.length}件×${splitDanger}包`);
+ document.getElementById('create-btn').disabled = false;
+ document.getElementById('create-btn').textContent = ` 确认打包（拆分：${parts.join('，')}）`;
+
+ // 显示预览
+ let html = `<div style="margin-bottom: 10px;">拆分模式：<strong style="color:#06b6d4">${verifiedPackages.length}</strong> 件包裹，每包全含</div>`;
+ if (splitNormal > 0) {
+ html += `<div style="margin-top: 8px; padding: 8px; background: rgba(21,101,192,0.06); border-radius: 6px; border-left: 3px solid #1565c0;">`;
+ html += `<div style="font-weight: 600; color: #1565c0; margin-bottom: 5px;"> 普货：${verifiedPackages.length} 件 × ${splitNormal} 包</div>`;
+ html += `</div>`;
+ }
+ if (splitDanger > 0) {
+ html += `<div style="margin-top: 8px; padding: 8px; background: rgba(239,68,68,0.06); border-radius: 6px; border-left: 3px solid #dc2626;">`;
+ html += `<div style="font-weight: 600; color: #dc2626; margin-bottom: 5px;"> 敏货：${verifiedPackages.length} 件 × ${splitDanger} 包</div>`;
+ html += `</div>`;
+ }
+ if (preview) preview.innerHTML = html;
+
+ // 表格
+ const tbody = document.getElementById('pack-preview-body');
+ if (tbody) {
+ let tableHtml = '';
+ for (let i = 0; i < splitNormal; i++) {
+ tableHtml += `<tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#1565c0;">普货</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">${i+1}/${splitNormal}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">${verifiedPackages.length}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">-</td></tr>`;
+ }
+ for (let i = 0; i < splitDanger; i++) {
+ tableHtml += `<tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#dc2626;">敏货</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">${i+1}/${splitDanger}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">${verifiedPackages.length}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">-</td></tr>`;
+ }
+ if (!tableHtml) {
+ tableHtml = `<tr><td colspan="4" style="padding:8px;text-align:center;color:var(--text-muted);">请设置打包数量</td></tr>`;
+ }
+ tbody.innerHTML = tableHtml;
+ }
+ return;
+ }
+
+ // 普货：已扫描但未标记敏货的
+ const normalItems = verifiedPackages.filter(p => !dangerPackages.some(d => d.id === p.id));
+ // 敏货：已标记的
+ const dangerItems = dangerPackages;
+
+ if (verifiedPackages.length === 0) {
+ if (preview) preview.innerHTML = `<span style="color: #0d47a1;"> 请先完成二次扫描</span>`;
+ document.getElementById('create-btn').disabled = true;
+ // 清空表格
+ const tbody = document.getElementById('pack-preview-body');
+ if (tbody) tbody.innerHTML = '';
+ return;
+ }
+
+ // 使用手动选择的包裹进行分配
+ let selectedNormal = selectedPackages
+ .map(id => normalItems.find(p => p.id === id))
+ .filter(Boolean);
+ let selectedDanger = selectedPackages
+ .map(id => dangerItems.find(p => p.id === id))
+ .filter(Boolean);
+
+ // 如果没有手动选择，用全部已扫描的分组
+ if (selectedPackages.length === 0) {
+ selectedNormal = normalItems;
+ selectedDanger = dangerItems;
+ }
+
+ const totalSelected = selectedNormal.length + selectedDanger.length;
+ if (totalSelected === 0) {
+ if (preview) preview.innerHTML = `<span style="color: #d97706;">请在左侧选择要打包的包裹（${verifiedPackages.length} 件已扫描）</span>`;
+ document.getElementById('create-btn').disabled = true;
+ // 清空表格
+ const tbody = document.getElementById('pack-preview-body');
+ if (tbody) tbody.innerHTML = '';
+ return;
+ }
+
+ let html = `<div style="margin-bottom: 10px;">已选 <strong style="color:#06b6d4">${totalSelected}</strong> 件</div>`;
+
+ // 普货分配
+ if (selectedNormal.length > 0 && normalCount > 0) {
+ const base = Math.floor(selectedNormal.length / normalCount);
+ const remainder = selectedNormal.length % normalCount;
+ html += `<div style="margin-top: 8px; padding: 8px; background: rgba(21,101,192,0.06); border-radius: 6px; border-left: 3px solid #1565c0;">`;
+ html += `<div style="font-weight: 600; color: #1565c0; margin-bottom: 5px;"> 普货：${selectedNormal.length} 件 → ${normalCount} 包</div>`;
+ for (let i = 0; i < normalCount; i++) {
+ const n = base + (i < remainder ? 1 : 0);
+ html += `<div style="font-size: 12px; color: #0d47a1;">包 ${normalCount}-${i + 1}: ${n} 件</div>`;
+ }
+ html += `</div>`;
+ }
+
+ // 敏货分配
+ if (selectedDanger.length > 0 && dangerCount > 0) {
+ const base = Math.floor(selectedDanger.length / dangerCount);
+ const remainder = selectedDanger.length % dangerCount;
+ html += `<div style="margin-top: 8px; padding: 8px; background: rgba(239,68,68,0.06); border-radius: 6px; border-left: 3px solid #dc2626;">`;
+ html += `<div style="font-weight: 600; color: #dc2626; margin-bottom: 5px;"> 敏货：${selectedDanger.length} 件 → ${dangerCount} 包</div>`;
+ for (let i = 0; i < dangerCount; i++) {
+ const n = base + (i < remainder ? 1 : 0);
+ html += `<div style="font-size: 12px; color: #b91c1c;">包 ${dangerCount}-${i + 1}: ${n} 件</div>`;
+ }
+ html += `</div>`;
+ }
+
+ // 没有货品但选了count
+ if (selectedNormal.length === 0 && normalCount > 0 && normalItems.length === 0) {
+ html += `<div style="margin-top: 8px; color: var(--text-muted); font-size: 12px;"> 普货：暂无可打包的普货</div>`;
+ }
+ if (selectedDanger.length === 0 && dangerCount > 0 && dangerItems.length === 0) {
+ html += `<div style="margin-top: 8px; color: var(--text-muted); font-size: 12px;"> 敏货：暂无可打包的敏货</div>`;
+ }
+
+ if (preview) preview.innerHTML = html;
+
+ // 同时更新预览表格
+ const tbody = document.getElementById('pack-preview-body');
+ if (tbody) {
+ let tableHtml = '';
+ if (selectedNormal.length > 0 && normalCount > 0) {
+ const base = Math.floor(selectedNormal.length / normalCount);
+ const remainder = selectedNormal.length % normalCount;
+ for (let i = 0; i < normalCount; i++) {
+ const n = base + (i < remainder ? 1 : 0);
+ tableHtml += `<tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);">普货</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">${i+1}/${normalCount}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">${n}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">-</td></tr>`;
+ }
+ }
+ if (selectedDanger.length > 0 && dangerCount > 0) {
+ const base = Math.floor(selectedDanger.length / dangerCount);
+ const remainder = selectedDanger.length % dangerCount;
+ for (let i = 0; i < dangerCount; i++) {
+ const n = base + (i < remainder ? 1 : 0);
+ tableHtml += `<tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#dc2626;">敏货</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">${i+1}/${dangerCount}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">${n}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;">-</td></tr>`;
+ }
+ }
+ if (!tableHtml) {
+ tableHtml = `<tr><td colspan="4" style="padding:8px;text-align:center;color:var(--text-muted);">请先完成二次扫描并选择包裹</td></tr>`;
+ }
+ tbody.innerHTML = tableHtml;
+ }
+
+ // 有效的打包判断
+ const hasNormal = selectedNormal.length > 0 && normalCount > 0 && selectedNormal.length >= normalCount;
+ const hasDanger = selectedDanger.length > 0 && dangerCount > 0 && selectedDanger.length >= dangerCount;
+ const canPack = hasNormal || hasDanger;
+
+ const createBtn = document.getElementById('create-btn');
+ if (createBtn) {
+ createBtn.disabled = !canPack;
+ if (canPack) {
+ const parts = [];
+ if (hasNormal) parts.push(`${selectedNormal.length}件普货→${normalCount}包`);
+ if (hasDanger) parts.push(`${selectedDanger.length}件敏货→${dangerCount}包`);
+ createBtn.textContent = ` 确认打包（${parts.join('，')}）`;
+ } else {
+ const reasons = [];
+ if (totalSelected === 0) reasons.push('未选择包裹');
+ if (selectedNormal.length > 0 && selectedNormal.length < normalCount) reasons.push('普货数量不足');
+ if (selectedDanger.length > 0 && selectedDanger.length < dangerCount) reasons.push('敏货数量不足');
+ createBtn.textContent = reasons.join('；') || '无法打包';
+ }
+ } else {
+ const parts = [];
+ if (hasNormal) parts.push(`${selectedNormal.length}件普货→${normalCount}包`);
+ if (hasDanger) parts.push(`${selectedDanger.length}件敏货→${dangerCount}包`);
+ createBtn.textContent = ` 确认打包（${parts.join('，')}）`;
+ }
+ }
+
+ // VIP 单独打包按钮：未扫完时仍可点（弹窗标记丢失并继续）
+ const vipBtn = document.getElementById('vip-solo-btn');
+ if (vipBtn) {
+ vipBtn.disabled = false;
+ const allScanned = verifiedPackages.length === totalPackages && totalPackages > 0;
+ vipBtn.style.opacity = '1';
+ if (allScanned) {
+ vipBtn.textContent = 'VIP单独打包';
+ } else {
+ const unscanned = totalPackages - verifiedPackages.length;
+ vipBtn.textContent = `还有 ${unscanned} 件未扫 - 标记丢失并继续`;
+ }
+ }
+
+// 拆分打包 - 每个包包含全部已扫描包裹，可指定普货/敏货各打N包
+ async function createSplitPacked() {
+ const batchEl = document.getElementById('batch-select');
+ const batchId = batchEl ? (batchEl.value || null) : null;
+ const normalCount = parseInt(document.getElementById('normal-pkg-count').value) || 0;
+ const dangerCount = parseInt(document.getElementById('danger-pkg-count').value) || 0;
+
+ if (normalCount === 0 && dangerCount === 0) {
+ showToast('请至少指定普货或敏货打包数量', 'error');
+ return;
+ }
+
+ // 获取所有已扫描包裹的ID
+ const selectedPkgIds = selectedPackages.length > 0 ? selectedPackages : verifiedPackages.map(p => p.id);
+ if (selectedPkgIds.length === 0) { showToast('未选择包裹', 'error'); return; }
+
+ const count = selectedPkgIds.length;
+ const totalPkgCount = normalCount + dangerCount;
+
+ // 构建确认消息
+ const parts = [];
+ if (normalCount > 0) parts.push(`<span style="color:#1565c0;"> 普货 ${count}件 × ${normalCount}包</span>`);
+ if (dangerCount > 0) parts.push(`<span style="color:#dc2626;"> 敏货 ${count}件 × ${dangerCount}包</span>`);
+ const msg = `将 <strong>${count}</strong> 件包裹拆分为：<br>` + parts.join('<br>') +
+ `<br><br><span style="font-size:13px;color:var(--text-muted);">共创建 ${totalPkgCount} 个打包记录（每包均含全部 ${count} 件包裹）</span>`;
+
+ confirmAction('拆分打包确认', msg, async function() {
+ lockAction();
+ try {
+ const allPackages = [];
+ const allSerials = [];
+ const natureLabels = [];
+
+// 普货包
+for (let i = 0; i < normalCount; i++) {
+const serial = `${normalCount || 1}-${i+1}`;
+allSerials.push(serial);
+natureLabels.push('普');
+allPackages.push({ serial, total: normalCount || 1, nature: '普', package_ids: [...selectedPkgIds] });
+}
+// 敏货包
+for (let i = 0; i < dangerCount; i++) {
+const serial = `${dangerCount || 1}-${i+1}`;
+allSerials.push(serial);
+natureLabels.push('敏');
+allPackages.push({ serial, total: dangerCount || 1, nature: '敏', package_ids: [...selectedPkgIds] });
+}
+
+ const result = await apiRequest('/api/create_packed_batch', {
+ method: 'POST',
+ body: JSON.stringify({
+ customer_id: {{ customer.id }},
+ packages: allPackages,
+ batch_id: batchId,
+     secondary_customer_ids: secondaryIds,
+ })
+ });
+
+ const packedIds = result.data && result.data.packed_ids ? result.data.packed_ids : [];
+ if (packedIds.length === 0) {
+ showToast('创建打包记录失败', 'error');
+ return;
+ }
+
+ // 展示详情弹窗
+ document.getElementById('packed-ids').value = JSON.stringify(packedIds);
+ document.getElementById('package-serials').value = JSON.stringify(allSerials);
+
+ const preview = allSerials.map((s, i) => {
+ const color = natureLabels[i] === '敏' ? '#dc2626' : '#1565c0';
+ return `<span style="display:inline-block;background:${color};color:#fff;padding:5px 12px;border-radius:6px;margin:3px;font-size:14px;">${natureLabels[i]}货 ${s}</span>`;
+ }).join('');
+ document.getElementById('label-preview').innerHTML = `
+ <strong>{{ customer.name }}</strong><br>
+ ${preview}
+ `;
+ generateMultiPackageInputs(packedIds, allSerials, natureLabels);
+ document.getElementById('detail-modal').classList.add('active');
+
+ } catch (e) {
+ showToast(e.message || '拆分打包失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }
+
+ // 创建打包记录 - 普货敏货自动分拆，同步打包，禁止混装
+ async function createPacked(bypassCheck) {
+ if (isActionLocked()) return;
+
+ // 拆分模式特殊处理：所有已扫描包裹参与每个包
+ if (splitMode && verifiedPackages.length > 0) {
+ return createSplitPacked();
+ }
+
+ // ====== 检查是否所有包裹已完成二次扫描 ======
+ const scannedCount = verifiedPackages.length;
+ if (scannedCount < totalPackages && !bypassCheck) {
+ const unscanned = totalPackages - scannedCount;
+ // 弹窗：标记丢失并继续（不弹原因）
+ const missingPackages = pendingPackages.filter(p => !verifiedPackages.some(v => v.id === p.id));
+ showLostConfirm(missingPackages, () => { createPacked(true); });
+ return;
+ }
+ // 恢复扫描状态样式
+ document.getElementById('scan-status').style.background = 'rgba(21,101,192,0.08)';
+ document.getElementById('scan-status').style.border = '1px solid rgba(21,101,192,0.3)';
+ document.getElementById('status-verified').style.color = '#1565c0';
+ document.getElementById('status-verified').style.fontWeight = 'normal';
+ const normalCount = parseInt(document.getElementById('normal-pkg-count').value) || 1;
+ const dangerCount = parseInt(document.getElementById('danger-pkg-count').value) || 1;
+ const batchEl = document.getElementById('batch-select');
+ const batchId = batchEl ? (batchEl.value || null) : null;
+
+ // 普货：已扫描但未标记敏货的
+ const normalItems = verifiedPackages.filter(p => !dangerPackages.some(d => d.id === p.id));
+ // 敏货：已标记的
+ const dangerItems = dangerPackages;
+
+ // 使用手动选择的包裹
+ let selectedNormal = selectedPackages.length > 0
+ ? selectedPackages.map(id => normalItems.find(p => p.id === id)).filter(Boolean)
+ : normalItems;
+ let selectedDanger = selectedPackages.length > 0
+ ? selectedPackages.map(id => dangerItems.find(p => p.id === id)).filter(Boolean)
+ : dangerItems;
+
+ const hasNormal = selectedNormal.length > 0 && selectedNormal.length >= normalCount;
+ const hasDanger = selectedDanger.length > 0 && selectedDanger.length >= dangerCount;
+
+ if (!hasNormal && !hasDanger) {
+ showToast('请选择要打包的包裹', 'error');
+ return;
+ }
+
+ // 构建所有打包数据（普货 + 敏货）
+ const allPackages = [];
+ const allSerials = [];
+ const natureLabels = [];
+
+ // 普货打包
+ if (hasNormal) {
+ const base = Math.floor(selectedNormal.length / normalCount);
+ const remainder = selectedNormal.length % normalCount;
+ let idx = 0;
+ for (let i = 0; i < normalCount; i++) {
+ const n = base + (i < remainder ? 1 : 0);
+ const pkgIds = [];
+ for (let j = 0; j < n && idx < selectedNormal.length; j++) {
+ pkgIds.push(selectedNormal[idx].id);
+ idx++;
+ }
+ const serial = `${normalCount}-${i + 1}`;
+ allSerials.push(serial);
+ natureLabels.push('普');
+ allPackages.push({
+ serial: serial,
+ total: normalCount,
+ nature: '普',
+ package_ids: pkgIds
+ });
+ }
+ }
+
+ // 敏货打包（禁止混装，独立创建）
+ if (hasDanger) {
+ const base = Math.floor(selectedDanger.length / dangerCount);
+ const remainder = selectedDanger.length % dangerCount;
+ let idx = 0;
+ for (let i = 0; i < dangerCount; i++) {
+ const n = base + (i < remainder ? 1 : 0);
+ const pkgIds = [];
+ for (let j = 0; j < n && idx < selectedDanger.length; j++) {
+ pkgIds.push(selectedDanger[idx].id);
+ idx++;
+ }
+ const serial = `${dangerCount}-${i + 1}`;
+ allSerials.push(serial);
+ natureLabels.push('敏');
+ allPackages.push({
+ serial: serial,
+ total: dangerCount,
+ nature: '敏',
+ package_ids: pkgIds
+ });
+ }
+ }
+
+ // 构建确认消息
+ const parts = [];
+ if (hasNormal) parts.push(`<span style="color:#1565c0;"> 普货 ${selectedNormal.length}件 → ${normalCount}包</span>`);
+ if (hasDanger) parts.push(`<span style="color:#dc2626;"> 敏货 ${selectedDanger.length}件 → ${dangerCount}包</span>`);
+ const confirmMsg = `即将同步创建：<br>${parts.join('<br>')}<br><br><span style="font-size:13px;color:var(--text-muted);">普货与敏货分开打包，绝不混装</span>`;
+
+ // ====== 检测该客户在此批次是否已有打包记录 ======
+ // 保存本次打包参数，供弹窗回调使用
+ _pendingPackPayload = { allPackages, allSerials, natureLabels, batchId, confirmMsg };
+
+ let checkUrl = `/api/packed/check_existing?customer_id={{ customer.id }}`;
+ if (batchId) checkUrl += `&batch_id=${batchId}`;
+
+ lockAction();
+ try {
+ const checkResult = await apiRequest(checkUrl, { method: 'GET' });
+ if (checkResult.data && checkResult.data.exists) {
+ // 有现有记录 → 弹出选择弹窗
+ showExistingPackedModal(checkResult.data.records);
+ return;
+ }
+ } catch (e) {
+ // 检测失败不阻断流程，直接走正常打包
+ } finally {
+ unlockAction();
+ }
+
+ // 无现有记录，走原有流程
+ doConfirmAndPack(_pendingPackPayload);
+ }
+
+ // 显示现有打包记录选择弹窗
+ function showExistingPackedModal(records) {
+ _selectedAppendTarget = null;
+
+ const list = document.getElementById('existing-records-list');
+ let html = '';
+ records.forEach(r => {
+ const natureColor = r.nature === '敏' ? '#dc2626' : '#1565c0';
+ const cartonedTag = r.is_cartoned
+ ? '<span style="font-size:11px;background:#94a3b8;color:#fff;padding:2px 6px;border-radius:3px;margin-left:6px;">已合箱</span>'
+ : '';
+ const trackingPreview = r.tracking_numbers.slice(0, 3).join('、') + (r.tracking_numbers.length > 3 ? ` 等${r.tracking_numbers.length}件` : '');
+ html += `
+ <div class="existing-record-item" id="erec-${r.id}" data-id="${r.id}"
+ style="padding:12px 15px;border:2px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all 0.2s;background:var(--bg-card);"
+ onclick="selectAppendTarget(${r.id}, '${r.serial_label}', '${r.nature}', ${r.item_count})"
+ onmouseenter="this.style.borderColor='var(--accent)'"
+ onmouseleave="if(_selectedAppendTarget!=${r.id}) this.style.borderColor='var(--border)'">
+ <div style="display:flex;justify-content:space-between;align-items:center;">
+ <div style="display:flex;align-items:center;gap:10px;">
+ <span style="font-size:16px;font-weight:700;color:var(--accent-hover);">${r.serial_label}</span>
+ <span style="font-size:12px;background:${natureColor};color:#fff;padding:2px 8px;border-radius:4px;">${r.nature}货</span>
+ ${cartonedTag}
+ </div>
+ <span style="font-size:13px;color:var(--text-secondary);">已含 ${r.item_count} 件</span>
+ </div>
+ <div style="font-size:12px;color:var(--text-muted);margin-top:5px;">
+ ${r.contents_description ? ` ${r.contents_description}` : '（未填写内容物）'}
+ </div>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+ ${trackingPreview}
+ </div>
+ </div>`;
+ });
+ list.innerHTML = html || '<div style="color:var(--text-muted);text-align:center;padding:20px;">暂无记录</div>';
+
+ document.getElementById('append-target-area').style.display = 'none';
+ document.getElementById('confirm-append-btn').style.display = 'none';
+ document.getElementById('existing-packed-modal').classList.add('active');
+ }
+
+ // 选中一条打包记录作为追加目标
+ function selectAppendTarget(id, serial, nature, itemCount) {
+ // 取消上一个选中
+ if (_selectedAppendTarget) {
+ const prev = document.getElementById(`erec-${_selectedAppendTarget}`);
+ if (prev) { prev.style.borderColor = 'var(--border)'; prev.style.background = 'var(--bg-card)'; }
+ }
+ _selectedAppendTarget = id;
+
+ const el = document.getElementById(`erec-${id}`);
+ if (el) { el.style.borderColor = '#1565c0'; el.style.background = 'rgba(21,101,192,0.06)'; }
+
+ const natureColor = nature === '敏' ? '#dc2626' : '#1565c0';
+ document.getElementById('append-target-info').innerHTML =
+ `<strong style="color:${natureColor};">${serial}</strong>（${nature}货，已含 ${itemCount} 件）`;
+ document.getElementById('append-target-area').style.display = 'block';
+ document.getElementById('confirm-append-btn').style.display = 'inline-flex';
+ }
+
+ function closeExistingModal() {
+ document.getElementById('existing-packed-modal').classList.remove('active');
+ _pendingPackPayload = null;
+ _selectedAppendTarget = null;
+ }
+
+ // 选择"重新打包" - 走原流程
+ function proceedRepack() {
+ document.getElementById('existing-packed-modal').classList.remove('active');
+ if (_pendingPackPayload) {
+ doConfirmAndPack(_pendingPackPayload);
+ }
+ }
+
+ // 选择"追加到所选包裹"
+ async function proceedAppend() {
+ if (!_selectedAppendTarget) {
+ showToast('请先选择要追加到的打包记录', 'error');
+ return;
+ }
+ if (!_pendingPackPayload) return;
+
+ document.getElementById('existing-packed-modal').classList.remove('active');
+
+ // 收集所有选中的入库包裹 id
+ const { allPackages } = _pendingPackPayload;
+ const allPkgIds = [];
+ allPackages.forEach(p => allPkgIds.push(...p.package_ids));
+
+ lockAction();
+ try {
+ await apiRequest(`/api/packed/${_selectedAppendTarget}/append_items`, {
+ method: 'POST',
+ body: JSON.stringify({ package_ids: allPkgIds })
+ });
+ showToast(` 已成功将 ${allPkgIds.length} 件追加到打包记录`, 'success');
+ setTimeout(() => window.location.href = '/packing', 1200);
+ } catch (e) {
+ showToast(e.message || '追加失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ // 原有确认+打包逻辑（抽取为独立函数）
+ function doConfirmAndPack(payload) {
+ const { allPackages, allSerials, natureLabels, batchId, confirmMsg } = payload;
+
+ confirmAction('确认打包', confirmMsg, async () => {
+ lockAction();
+ try {
+ const result = await apiRequest('/api/create_packed_batch', {
+ method: 'POST',
+ body: JSON.stringify({
+ customer_id: {{ customer.id }},
+ packages: allPackages,
+ batch_id: batchId,
+     secondary_customer_ids: secondaryIds,
+ })
+ });
+
+ const packedIds = result.data && result.data.packed_ids ? result.data.packed_ids : [];
+
+ if (packedIds.length === 0) {
+ showToast('创建打包记录失败：未返回有效的打包ID', 'error');
+ return;
+ }
+
+ // 打包成功后清除挂起状态
+ try {
+ await apiRequest('/api/pack/resume', {
+ method: 'POST',
+ body: JSON.stringify({ customer_id: {{ customer.id }} })
+ });
+ } catch (e) {
+ // 清除挂起失败不阻塞
+ }
+
+ // 显示发货明细弹窗
+ document.getElementById('packed-ids').value = JSON.stringify(packedIds);
+ document.getElementById('package-serials').value = JSON.stringify(allSerials);
+
+ // 生成包裹预览（区分颜色）
+ const preview = allSerials.map((s, i) => {
+ const color = natureLabels[i] === '敏' ? '#dc2626' : '#1565c0';
+ const emoji = natureLabels[i] === '敏' ? '' : '';
+ return `<span style="display:inline-block;background:${color};color:#fff;padding:5px 12px;border-radius:6px;margin:3px;font-size:14px;">${emoji} ${s}</span>`;
+ }).join('');
+ document.getElementById('label-preview').innerHTML = `
+ <strong>{{ customer.name }}</strong><br>
+ ${preview}
+ `;
+
+ // 动态生成多包裹输入区域（含类型信息）
+ generateMultiPackageInputs(packedIds, allSerials, natureLabels);
+
+ document.getElementById('detail-modal').classList.add('active');
+
+ } catch (e) {
+ showToast(e.message || '创建失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }
+
+ // ========== VIP单独发货模式 ==========
+ async function submitVipSoloPack() {
+ if (isActionLocked()) return;
+
+ // 拆分模式特殊处理
+ if (splitMode && verifiedPackages.length > 0) {
+ return createSplitVipPacked();
+ }
+
+ // 有未扫描的包裹：弹窗确认是否标记丢失并继续
+ if (verifiedPackages.length < totalPackages) {
+ const missingPackages = pendingPackages.filter(p => !verifiedPackages.some(v => v.id === p.id));
+ showLostConfirm(missingPackages, () => { _doVipSoloPackSubmit(); });
+ return;
+ }
+
+ // 正常：选普/敏数等 + 提交
+ return _doVipSoloPackSubmit();
+}
+
+// VIP 单独打包：主流程（不含扫描完整性校验）
+function _doVipSoloPackSubmit() {
+ // 已扫描的 verifiedPackages 中已扫描的 < normalCount + dangerCount 时也要校验
+ const normalCount = parseInt(document.getElementById('normal-pkg-count').value) || 1;
+ const dangerCount = parseInt(document.getElementById('danger-pkg-count').value) || 1;
+
+ const normalItems = verifiedPackages.filter(p => !dangerPackages.some(d => d.id === p.id));
+ const dangerItems = dangerPackages;
+
+ const selectedNormal = selectedPackages.length > 0
+ ? selectedPackages.map(id => normalItems.find(p => p.id === id)).filter(Boolean)
+ : normalItems;
+ const selectedDanger = selectedPackages.length > 0
+ ? selectedPackages.map(id => dangerItems.find(p => p.id === id)).filter(Boolean)
+ : dangerItems;
+
+ const hasNormal = selectedNormal.length > 0 && selectedNormal.length >= normalCount;
+ const hasDanger = selectedDanger.length > 0 && selectedDanger.length >= dangerCount;
+
+ if (!hasNormal && !hasDanger) {
+ showToast('已扫描的包裹不足，请至少扫一个', 'error');
+ return;
+ }
+ // 调用主流程
+ _vipSoloPackBuildAndSubmit();
+}
+
+// 共享：VIP 单独打包 - 构建包数据并提交（从原 submitVipSoloPack 后半段拆出）
+async function _vipSoloPackBuildAndSubmit() {
+
+  const normalCount = parseInt(document.getElementById('normal-pkg-count').value) || 1;
+  const dangerCount = parseInt(document.getElementById('danger-pkg-count').value) || 1;
+  const batchEl = document.getElementById('batch-select');
+  const batchId = batchEl ? (batchEl.value || null) : null;
+
+  const normalItems = verifiedPackages.filter(p => !dangerPackages.some(d => d.id === p.id));
+  const dangerItems = dangerPackages;
+
+  const selectedNormal = selectedPackages.length > 0
+   ? selectedPackages.map(id => normalItems.find(p => p.id === id)).filter(Boolean)
+   : normalItems;
+  const selectedDanger = selectedPackages.length > 0
+   ? selectedPackages.map(id => dangerItems.find(p => p.id === id)).filter(Boolean)
+   : dangerItems;
+
+  const hasNormal = selectedNormal.length > 0 && selectedNormal.length >= normalCount;
+  const hasDanger = selectedDanger.length > 0 && selectedDanger.length >= dangerCount;
+
+  if (!hasNormal && !hasDanger) {
+   showToast('已扫描的包裹不足，请至少扫一个', 'error');
+   return;
+  }
+
+  // 构建所有打包数据
+  const allPackages = [];
+
+  if (hasNormal) {
+   const base = Math.floor(selectedNormal.length / normalCount);
+   const remainder = selectedNormal.length % normalCount;
+   let idx = 0;
+   for (let i = 0; i < normalCount; i++) {
+    const n = base + (i < remainder ? 1 : 0);
+    const pkgIds = [];
+    for (let j = 0; j < n && idx < selectedNormal.length; j++) {
+     pkgIds.push(selectedNormal[idx].id);
+     idx++;
+    }
+    allPackages.push({
+     serial: `${normalCount}-${i + 1}`,
+     total: normalCount,
+     nature: '普',
+     package_ids: pkgIds
+    });
+   }
+  }
+
+  if (hasDanger) {
+   const base = Math.floor(selectedDanger.length / dangerCount);
+   const remainder = selectedDanger.length % dangerCount;
+   let idx = 0;
+   for (let i = 0; i < dangerCount; i++) {
+    const n = base + (i < remainder ? 1 : 0);
+    const pkgIds = [];
+    for (let j = 0; j < n && idx < selectedDanger.length; j++) {
+     pkgIds.push(selectedDanger[idx].id);
+     idx++;
+    }
+    allPackages.push({
+     serial: `${dangerCount}-${i + 1}`,
+     total: dangerCount,
+     nature: '敏',
+     package_ids: pkgIds
+    });
+   }
+  }
+
+  lockAction();
+  try {
+   const result = await apiRequest('/api/create_packed_batch', {
+    method: 'POST',
+    body: JSON.stringify({
+     customer_id: {{ customer.id }},
+     packages: allPackages,
+     batch_id: batchId,
+     secondary_customer_ids: secondaryIds,
+     vip_solo: true,
+    })
+   });
+
+   const packedIds = result.data && result.data.packed_ids ? result.data.packed_ids : [];
+   const allSerials = allPackages.map(p => p.serial);
+   const natureLabels = allPackages.map(p => p.nature);
+
+   if (packedIds.length === 0) {
+    showToast('VIP打包成功，但未返回打包ID', 'warning');
+    setTimeout(() => { window.location.href = '/vip/packed'; }, 800);
+    return;
+   }
+
+   // 清除挂起
+   try {
+    await apiRequest('/api/pack/resume', {
+     method: 'POST',
+     body: JSON.stringify({ customer_id: {{ customer.id }} })
+    });
+   } catch (e) {}
+
+   // 打开填写发货明细弹窗
+   showVipDetailModal(packedIds, allSerials, natureLabels);
+  } catch (e) {
+   showToast(e.message || 'VIP打包失败', 'error');
+  } finally {
+   unlockAction();
+  }
+ }
+
+ // VIP拆分模式打包
+ async function createSplitVipPacked() {
+  const batchEl = document.getElementById('batch-select');
+  const batchId = batchEl ? (batchEl.value || null) : null;
+  const normalCount = parseInt(document.getElementById('normal-pkg-count').value) || 0;
+  const dangerCount = parseInt(document.getElementById('danger-pkg-count').value) || 0;
+
+  if (normalCount === 0 && dangerCount === 0) {
+   showToast('请至少指定普货或敏货打包数量', 'error');
+   return;
+  }
+
+  const selectedPkgIds = selectedPackages.length > 0 ? selectedPackages : verifiedPackages.map(p => p.id);
+  if (selectedPkgIds.length === 0) { showToast('未选择包裹', 'error'); return; }
+
+  const count = selectedPkgIds.length;
+  const totalPkgCount = normalCount + dangerCount;
+
+  const parts = [];
+  if (normalCount > 0) parts.push(`<span style="color:#1565c0;"> 普货 ${count}件 × ${normalCount}包</span>`);
+  if (dangerCount > 0) parts.push(`<span style="color:#dc2626;"> 敏货 ${count}件 × ${dangerCount}包</span>`);
+  const msg = `VIP单独打包 — 将 <strong>${count}</strong> 件包裹拆分为：<br>` + parts.join('<br>') +
+   `<br><br><span style="font-size:13px;color:var(--text-muted);">共创建 ${totalPkgCount} 个打包记录（每包均含全部 ${count} 件包裹）</span>`;
+
+  confirmAction('VIP拆分打包确认', msg, async function() {
+   lockAction();
+   try {
+    const allPackages = [];
+    for (let i = 0; i < normalCount; i++) {
+     allPackages.push({ serial: `${normalCount || 1}-${i+1}`, total: normalCount || 1, nature: '普', package_ids: [...selectedPkgIds] });
+    }
+    for (let i = 0; i < dangerCount; i++) {
+     allPackages.push({ serial: `${dangerCount || 1}-${i+1}`, total: dangerCount || 1, nature: '敏', package_ids: [...selectedPkgIds] });
+    }
+
+    await apiRequest('/api/create_packed_batch', {
+     method: 'POST',
+     body: JSON.stringify({
+     customer_id: {{ customer.id }},
+     packages: allPackages,
+     batch_id: batchId,
+     secondary_customer_ids: secondaryIds,
+     vip_solo: true,
+    })
+    });
+
+    showToast('VIP拆分打包成功，正在跳转…', 'success');
+    setTimeout(() => { window.location.href = '/vip/packed'; }, 800);
+   } catch (e) {
+    showToast(e.message || 'VIP拆分打包失败', 'error');
+   } finally {
+    unlockAction();
+   }
+  });
+ }
+
+ // 动态生成多包裹输入区域
+ function generateMultiPackageInputs(packedIds, serials, natureLabels) {
+ const container = document.getElementById('multi-packages-input');
+ const count = packedIds.length;
+ natureLabels = natureLabels || [];
+
+ // 只填内容物描述，重量尺寸后续在打包记录中修改
+ let html = '';
+ for (let i = 0; i < count; i++) {
+ const bgColor = i % 2 === 0 ? 'var(--bg-input)' : 'var(--bg-card)';
+ const nature = natureLabels[i] || '普';
+ const natureColor = nature === '敏' ? '#dc2626' : '#1565c0';
+ const natureText = nature === '敏' ? '敏货' : '普货';
+
+ html += '<div style="padding: 15px; background: ' + bgColor + '; border: 1px solid rgba(148,163,184,0.12); border-radius: 10px; margin-bottom: 12px;">' +
+ '<div style="font-weight: 600; color: var(--accent-hover); margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">' +
+ ' 包裹 ' + serials[i] +
+ '<span style="font-size: 12px; padding: 2px 8px; background: ' + natureColor + '; color: #fff; border-radius: 4px; font-weight: normal;">' + natureText + '</span>' +
+ '</div>' +
+ '<div class="form-group" style="margin-bottom:0;">' +
+ '<label style="font-size: 13px;"> 内容物描述 <span style="color:#0d47a1;">*</span></label>' +
+ '<textarea id="pkg-content-' + packedIds[i] + '" rows="2" placeholder="必填：描述包裹内的商品内容（如：衣服5件、鞋子2双）" style="font-size:14px;" oninput="updateSaveBtnState()"></textarea>' +
+ '</div>' +
+ '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding:7px 10px;background:rgba(124,45,18,0.06);border:1px solid rgba(124,45,18,0.25);border-radius:8px;">' +
+ '<input type="checkbox" id="pkg-fullbox-' + packedIds[i] + '" style="width:17px;height:17px;cursor:pointer;">' +
+ '<label for="pkg-fullbox-' + packedIds[i] + '" style="font-size:13px;color:#9c6f54;cursor:pointer;">整箱（此包裹记为整箱，合箱时单独装箱）</label>' +
+ '</div>' +
+ '</div>';
+ }
+ container.innerHTML = html;
+ // 初始检查
+ updateSaveBtnState();
+ }
+
+ // 根据包裹内容物描述是否齐全，启用/禁用保存按钮
+ function updateSaveBtnState() {
+ const btn = document.getElementById('save-print-btn');
+ if (!btn) return;
+ const ids = JSON.parse(document.getElementById('packed-ids')?.value || '[]');
+ const unified = (document.getElementById('contents-description')?.value || '').trim();
+ let allFilled = ids.length > 0;
+ for (const pid of ids) {
+ const ta = document.getElementById('pkg-content-' + pid);
+ if (!ta || !ta.value.trim()) {
+ if (!unified) { allFilled = false; break; }
+ }
+ }
+ btn.disabled = !allFilled;
+ btn.style.background = allFilled ? 'var(--success)' : '#9ca3af';
+ btn.style.cursor = allFilled ? 'pointer' : 'not-allowed';
+ btn.style.opacity = allFilled ? '1' : '0.6';
+ }
+
+ // 挂起扫描进度
+ async function hangScan() {
+ if (verifiedPackages.length === 0) {
+ showToast('尚未扫描任何包裹，无需挂起', 'warning');
+ return;
+ }
+ const status = verifiedPackages.length >= totalPackages ? 'complete' : 'incomplete';
+ const statusText = status === 'complete' ? '已扫描全部完成' : '缺件（未扫描完）';
+ showToast(`正在挂起：${verifiedPackages.length}/${totalPackages} 件，${statusText}`, 'info');
+ try {
+ const result = await apiRequest('/api/pack/hang', {
+ method: 'POST',
+ body: JSON.stringify({
+ customer_id: {{ customer.id }},
+ verified_count: verifiedPackages.length,
+ total_count: totalPackages,
+ verified_ids: verifiedPackages.map(p => p.id),
+ danger_ids: dangerPackages.map(p => p.id)
+ })
+ });
+ showToast(result.message || '已挂起', 'success');
+ setTimeout(() => window.location.href = '/packing', 500);
+ } catch (e) {
+ showToast(e.message || '挂起失败', 'error');
+ }
+ }
+
+// 显示 VIP 单独发货的发货明细弹窗
+ function showVipDetailModal(packedIds, allSerials, natureLabels) {
+ document.getElementById('packed-ids').value = JSON.stringify(packedIds);
+ document.getElementById('package-serials').value = JSON.stringify(allSerials);
+
+ const preview = allSerials.map((s, i) => {
+ const color = natureLabels[i] === '敏' ? '#dc2626' : '#1565c0';
+ return `<span style="display:inline-block;background:${color};color:#fff;padding:5px 12px;border-radius:6px;margin:3px;font-size:14px;"> ${s}</span>`;
+ }).join('');
+ document.getElementById('label-preview').innerHTML = `<strong>{{ customer.name }}</strong><br>${preview}`;
+
+ generateMultiPackageInputs(packedIds, allSerials, natureLabels);
+
+ // 修改保存按钮跳转目标为 vip/packed
+ const saveBtn = document.getElementById('save-print-btn');
+ if (saveBtn) {
+ saveBtn.setAttribute('onclick', 'saveAndPrintVip()');
+ saveBtn.textContent = '保存并打印标签';
+ }
+
+ document.getElementById('detail-modal').classList.add('active');
+ }
+
+ async function saveAndPrintVip() {
+ const ids = JSON.parse(document.getElementById('packed-ids').value || '[]');
+ const serials = JSON.parse(document.getElementById('package-serials').value || '[]');
+ if (ids.length === 0) { showToast('未检测到打包记录', 'error'); return; }
+
+ // 收集每个包裹的品名
+ const perPkgContents = [];
+ for (let i = 0; i < ids.length; i++) {
+ const ta = document.querySelector(`#pkg-content-${ids[i]}`);
+ if (ta) perPkgContents.push(ta.value.trim());
+ else perPkgContents.push('');
+ }
+ const unifiedContents = (document.getElementById('contents-description') || {}).value || '';
+
+ for (let i = 0; i < perPkgContents.length; i++) {
+ const c = perPkgContents[i] || unifiedContents;
+ if (!c) {
+ showToast('包裹 ' + (i + 1) + ' 请填写内容物描述', 'error');
+ return;
+ }
+ }
+
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ // 逐个更新每个打包记录
+ for (let i = 0; i < ids.length; i++) {
+ const c = perPkgContents[i] || unifiedContents;
+ const fbEl = document.getElementById('pkg-fullbox-' + ids[i]);
+ const fb = fbEl ? fbEl.checked : false;
+ await apiRequest('/api/packed/records/update', {
+ method: 'POST',
+ body: JSON.stringify({
+ id: ids[i],
+ contents_description: c,
+ is_full_box: fb
+ })
+ });
+ }
+
+ // 关闭详情弹窗，准备进入打印队列
+ document.getElementById('detail-modal').classList.remove('active');
+
+ // 初始化打印队列（与正常打包相同的流程）
+ printQueue = ids;
+ printSerials = serials;
+ printIndex = 0;
+ printCancelled = false;
+ printedFlags = new Array(ids.length).fill(false);
+
+ document.getElementById('print-queue-count').textContent = `共 ${ids.length} 张标签`;
+ document.getElementById('print-queue-modal').classList.add('active');
+ updatePrintQueueUI();
+ } catch (e) {
+ showToast(e.message || '保存失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ async function closeDetailModal() {
+ // 直接回退已创建的打包记录
+ const packedIds = JSON.parse(document.getElementById('packed-ids').value || '[]');
+ const isVip = {{ 'true' if is_vip_solo else 'false' }};
+ if (packedIds.length === 0) {
+ document.getElementById('detail-modal').classList.remove('active');
+ return;
+ }
+ if (!confirm('确定取消吗？\n\n已创建的 ' + packedIds.length + ' 个打包记录将被删除，包裹恢复为待打包状态。')) {
+ return;
+ }
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ for (const pid of packedIds) {
+ // VIP 单独发货用专用回退接口（会自动清理 Carton）
+ const url = isVip ? '/api/vip/packed/' + pid + '/rollback' : '/api/packed/records/rollback/' + pid;
+ await apiRequest(url, { method: 'POST' });
+ }
+ showToast('已回退 ' + packedIds.length + ' 个打包记录', 'success');
+ } catch (e) {
+ showToast('回退失败: ' + (e.message || ''), 'error');
+ } finally {
+ unlockAction();
+ }
+ document.getElementById('detail-modal').classList.remove('active');
+ window.location.href = isVip ? '/vip/packed' : '/packing';
+ }
+
+ function copyFirstToAll() {
+ const packedIds = JSON.parse(document.getElementById('packed-ids').value);
+ if (packedIds.length <= 1) {
+ showToast('只有一个包裹，无需复制', 'info');
+ return;
+ }
+
+ const contents = document.getElementById('pkg-content-' + packedIds[0]).value;
+ const firstFb = document.getElementById('pkg-fullbox-' + packedIds[0]);
+ const fbVal = firstFb ? firstFb.checked : false;
+ for (let i = 1; i < packedIds.length; i++) {
+ document.getElementById('pkg-content-' + packedIds[i]).value = contents;
+ const fbEl = document.getElementById('pkg-fullbox-' + packedIds[i]);
+ if (fbEl) fbEl.checked = fbVal;
+ }
+ showToast('已复制到所有包裹', 'success');
+ }
+
+ // 打印队列管理
+ let printQueue = [];
+ let printSerials = [];
+ let printIndex = 0;
+ let printCancelled = false;
+ let printedFlags = [];
+
+ async function saveAndPrint() {
+ const packedIds = JSON.parse(document.getElementById('packed-ids').value);
+ const count = packedIds.length;
+ const uniformContents = document.getElementById('contents-description').value.trim();
+
+ // 验证：内容物描述必填
+ for (let i = 0; i < count; i++) {
+ const ta = document.getElementById('pkg-content-' + packedIds[i]);
+ const contents = ta ? ta.value.trim() : '';
+ if (!contents && !uniformContents) {
+ showToast('包裹 ' + (i + 1) + ' 请填写内容物描述', 'error');
+ return;
+ }
+ }
+
+ try {
+ // 分别更新每个打包记录的内容物 + 逐包裹整箱标记
+ for (let i = 0; i < count; i++) {
+ const ta = document.getElementById('pkg-content-' + packedIds[i]);
+ let contents = ta ? ta.value.trim() : '';
+ if (!contents && uniformContents) {
+ contents = uniformContents;
+ }
+ const fbEl = document.getElementById('pkg-fullbox-' + packedIds[i]);
+ const fb = fbEl ? fbEl.checked : false;
+
+ await apiRequest('/api/packed/' + packedIds[i] + '/update', {
+ method: 'POST',
+ body: JSON.stringify({ description: contents, is_full_box: fb })
+ });
+ }
+
+ // 保存成功，初始化打印队列
+ const serials = JSON.parse(document.getElementById('package-serials').value);
+ document.getElementById('detail-modal').classList.remove('active');
+
+ printQueue = packedIds;
+ printSerials = serials;
+ printIndex = 0;
+ printCancelled = false;
+ printedFlags = new Array(packedIds.length).fill(false);
+
+ // 显示打印队列弹窗
+ document.getElementById('print-queue-count').textContent = `共 ${count} 张标签`;
+ document.getElementById('print-queue-modal').classList.add('active');
+
+ updatePrintQueueUI();
+
+ } catch (e) {
+ showToast(e.message || '保存失败', 'error');
+ }
+ }
+
+ function updatePrintQueueUI() {
+ if (printCancelled) return;
+
+ const total = printQueue.length;
+
+ // 更新进度
+ const displayIndex = Math.min(printIndex + 1, total);
+ document.getElementById('print-current').textContent = `${displayIndex} / ${total}`;
+ document.getElementById('print-progress-bar').style.width = `${(Math.min(printIndex, total) / total) * 100}%`;
+ document.getElementById('print-current-label').textContent = `当前标签: ${printSerials[printIndex] || ''}`;
+
+ // 控制按钮状态
+ const finishArea = document.getElementById('print-finish-area');
+ const actionButtons = document.getElementById('print-action-buttons');
+
+ if (printIndex >= total) {
+ // 全部处理完毕
+ actionButtons.style.display = 'none';
+ finishArea.style.display = 'block';
+ document.getElementById('print-current-label').textContent = '所有标签已处理完毕';
+ document.getElementById('print-current-label').style.background = 'rgba(21,101,192,0.10)';
+ document.getElementById('print-current-label').style.color = '#1565c0';
+ } else {
+ actionButtons.style.display = 'flex';
+ finishArea.style.display = 'none';
+ document.getElementById('print-current-label').style.background = 'rgba(21,101,192,0.08)';
+ document.getElementById('print-current-label').style.color = '#1565c0';
+ }
+ }
+
+ function printCurrentLabel() {
+ if (printCancelled || printIndex >= printQueue.length) return;
+ const packedId = printQueue[printIndex];
+ window.open(
+ `/print_packed_label/${packedId}`,
+ `print_${packedId}_${Date.now()}`,
+ 'width=420,height=500,toolbar=0,scrollbars=0,status=0'
+ );
+ printedFlags[printIndex] = true;
+ showToast(`已打开标签 ${printSerials[printIndex]} 的打印窗口`, 'success');
+ }
+
+ function pdfCurrentLabel() {
+ if (printCancelled || printIndex >= printQueue.length) return;
+ const packedId = printQueue[printIndex];
+ // 直接触发PDF下载
+ const link = document.createElement('a');
+ link.href = `/pdf/packed_label/${packedId}`;
+ link.download = `packed_label_${printSerials[printIndex]}.pdf`;
+ link.click();
+ printedFlags[printIndex] = true;
+ showToast(`正在下载标签 ${printSerials[printIndex]} 的PDF`, 'success');
+ }
+
+ function nextPrintLabel() {
+ if (printCancelled || printIndex >= printQueue.length) return;
+ printIndex++;
+ updatePrintQueueUI();
+ }
+
+ function skipPrint() {
+ if (printCancelled || printIndex >= printQueue.length) return;
+ printIndex++;
+ updatePrintQueueUI();
+ }
+
+ async function cancelPrintQueue() {
+ printCancelled = true;
+ document.getElementById('print-queue-modal').classList.remove('active');
+ showToast('已取消打印', 'info');
+ {% if is_vip_solo %}
+ window.location.href = '/vip/packed';
+ return;
+ {% endif %}
+ // 检查是否有未打包包裹需要退回
+ try {
+ const checkResult = await apiRequest(`/api/pack/{{ customer.id }}/remaining_count`, { method: 'GET' });
+ const remainingCount = checkResult.data && checkResult.data.count || 0;
+ if (remainingCount > 0) {
+ setTimeout(() => showReturnConfirm(remainingCount), 500);
+ return;
+ }
+ } catch (e) {}
+ setTimeout(() => window.location.href = '/packing', 500);
+ }
+
+ async function finishPrintQueue() {
+ document.getElementById('print-queue-modal').classList.remove('active');
+ const printedCount = printedFlags.filter(f => f).length;
+ showToast(` 已完成 ${printedCount}/${printQueue.length} 张标签打印`, 'success');
+
+ {% if is_vip_solo %}
+ // VIP 单独发货：完成后跳转到 VIP 单独打包记录页
+ window.location.href = '/vip/packed';
+ return;
+ {% endif %}
+
+ // 检查是否有未打包的包裹需要退回
+ try {
+ const checkResult = await apiRequest(`/api/pack/{{ customer.id }}/remaining_count`, { method: 'GET' });
+ const remainingCount = checkResult.data && checkResult.data.count || 0;
+ if (remainingCount > 0) {
+ // 有剩余包裹未打包，弹窗确认是否退回
+ showReturnConfirm(remainingCount);
+ return;
+ }
+ } catch (e) {
+ // 检查失败不阻塞，直接返回列表
+ }
+ window.location.href = '/packing';
+ }
+
+ function showReturnConfirm(count) {
+ // 创建确认弹窗
+ const overlay = document.createElement('div');
+ overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+ overlay.innerHTML = `
+ <div style="background:var(--bg-card,#fff);border-radius:16px;padding:30px;max-width:480px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+ <div style="font-size:48px;margin-bottom:15px;"></div>
+ <div style="font-size:18px;font-weight:700;color:var(--text-primary,#1e293b);margin-bottom:10px;">还有包裹未打包</div>
+ <div style="font-size:15px;color:var(--text-secondary,#64748b);margin-bottom:8px;line-height:1.6;">
+ 检测到 <strong style="color:#d97706;font-size:18px;">${count}</strong> 件包裹<strong>未被打包</strong>
+ </div>
+ <div style="font-size:13px;color:#ef4444;margin-bottom:20px;padding:10px;background:rgba(239,68,68,0.06);border-radius:8px;border:1px solid rgba(239,68,68,0.15);">
+ 建议退回已入库状态，防止遗漏（如客户只发敏货不发普货）
+ </div>
+ <div style="display:flex;gap:12px;justify-content:center;">
+ <button id="btn-return-yes" style="padding:12px 28px;background:#d97706;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;"> 确认退回已入库</button>
+ <button id="btn-return-no" style="padding:12px 28px;background:var(--border,#e2e8f0);color:var(--text-secondary,#64748b);border:none;border-radius:10px;font-size:15px;cursor:pointer;">暂不处理</button>
+ </div>
+ </div>
+ `;
+ document.body.appendChild(overlay);
+
+ document.getElementById('btn-return-yes').onclick = async function() {
+ overlay.remove();
+ lockAction();
+ try {
+ await apiRequest('/api/pack/{{ customer.id }}/return_remaining', { method: 'POST' });
+ showToast(` 已将 ${count} 件包裹退回已入库状态`, 'success');
+ } catch (e) {
+ showToast(e.message || '退回失败', 'error');
+ } finally {
+ unlockAction();
+ setTimeout(() => window.location.reload(), 800);
+ }
+ };
+
+ document.getElementById('btn-return-no').onclick = function() {
+ overlay.remove();
+ window.location.href = '/packing';
+ };
+ }
+
+ // 初始化
+ updateScanCounts();
+ updateDistribution();
+
+ // 恢复挂起扫描状态
+ {% if scan_hung_state %}
+ (function restoreHungState() {
+ const hungState = {{ scan_hung_state | tojson }};
+ if (!hungState || !hungState.verified_ids) return;
+ hungState.verified_ids.forEach(id => {
+ const item = document.getElementById('pkg-' + id);
+ if (item) {
+ const tracking = item.dataset.tracking;
+ const seq = parseInt(item.dataset.seq) || 0;
+ if (!verifiedPackages.some(p => p.id === id)) {
+ verifiedPackages.push({ id: id, tracking: tracking, seq: seq });
+ }
+ // 恢复敏货标记（从 hungState.danger_ids）
+ const isDanger = (hungState.danger_ids || []).includes(id) || item.dataset.isDanger === 'true';
+ if (isDanger && !dangerPackages.some(p => p.id === id)) {
+ dangerPackages.push({ id: id, tracking: tracking, seq: seq });
+ }
+ updatePackageStatus(id, isDanger ? 'danger' : 'verified');
+ // 自动选中
+ if (!selectedPackages.includes(id)) {
+ selectedPackages.push(id);
+ }
+ updatePackageSelectionUI(id, true);
+ }
+ });
+ updateScanCounts();
+ updateDistribution();
+ showToast(`已恢复挂起状态：${hungState.verified_count}/${hungState.total_count} 件已扫描`, 'info');
+ })();
+ {% endif %}
+
+ // 页面加载自动聚焦二次扫描框
+ setTimeout(() => {
+ const input = document.getElementById('normal-verify-input');
+ if (input) input.focus();
+ }, 300);
+
+ // ========== 漏扫录入（打包操作界面内） ==========
+ function showQuickAddInPack() {
+ document.getElementById('quick-add-inline').style.display = 'block';
+ document.getElementById('quick-add-btn').style.display = 'none';
+ setTimeout(() => document.getElementById('quick-add-tracking').focus(), 100);
+ }
+
+ function hideQuickAddInPack() {
+ document.getElementById('quick-add-inline').style.display = 'none';
+ document.getElementById('quick-add-btn').style.display = '';
+ document.getElementById('quick-add-tracking').value = '';
+ }
+
+ async function submitQuickAddInPack() {
+ const input = document.getElementById('quick-add-tracking');
+ const tracking = input.value.trim();
+ if (!tracking) { showToast('请输入快递单号', 'warning'); input.focus(); return; }
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest('/api/inbound/quick_add', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ customer_id: {{ customer.id }}, tracking_number: tracking })
+ });
+ addPackageToUI(result.id, result.tracking_number || tracking, result.sequence_no || 0);
+ input.value = '';
+ showToast(result.message || '录入成功', 'success');
+ // 保持输入框打开以便连续录入，自动聚焦
+ setTimeout(() => input.focus(), 200);
+ } catch (e) {
+ showToast(e.message || '录入失败', 'error');
+ input.focus();
+ } finally {
+ unlockAction();
+ }
+ }
+
+ function addPackageToUI(id, tracking, seq) {
+ totalPackages = totalPackages + 1;
+
+ const container = document.getElementById('package-list');
+ const div = document.createElement('div');
+ div.className = 'package-item';
+ div.id = 'pkg-' + id;
+ div.setAttribute('data-id', id);
+ div.setAttribute('data-tracking', tracking);
+ div.setAttribute('data-seq', seq);
+ div.setAttribute('data-is-danger', 'false');
+ div.setAttribute('data-status', 'unverified');
+ div.setAttribute('onclick', 'togglePackageSelection(' + id + ')');
+ div.style.cssText = 'padding: 15px; border: 2px solid var(--border); border-radius: 10px; margin-bottom: 10px; transition: all 0.3s; background: var(--bg-card); cursor: pointer;';
+
+ div.innerHTML =
+ '<div style="display: flex; justify-content: space-between; align-items: center;">' +
+ '<div style="display: flex; align-items: center; gap: 15px;">' +
+ '<input type="checkbox" id="pkg-check-' + id + '" onclick="event.stopPropagation(); togglePackageSelection(' + id + ')" style="width: 20px; height: 20px; cursor: pointer;">' +
+ '<div>' +
+ '<div style="font-weight: 600; font-size: 15px;">' + tracking + '</div>' +
+ '<div style="font-size: 12px; color: var(--text-secondary);">序号: ' + seq + '</div>' +
+ '</div>' +
+ '</div>' +
+ '<div style="display: flex; gap: 10px; align-items: center;" id="pkg-actions-' + id + '">' +
+ '<span class="verify-badge" id="badge-' + id + '" style="padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; background: var(--border); color: var(--text-secondary);">未扫描</span>' +
+ '<button class="btn" id="danger-btn-' + id + '" onclick="event.stopPropagation(); toggleSingleDanger(' + id + ')" style="display: none; padding: 4px 10px; font-size: 12px; background: #fca5a5; color: #7f1d1d; border: 1px solid #ef4444; border-radius: 4px; white-space: nowrap;" title="点击标记为敏货">标记敏货</button>' +
+ '<button class="btn" id="danger-cancel-btn-' + id + '" onclick="event.stopPropagation(); toggleSingleDanger(' + id + ')" style="display: none; padding: 4px 10px; font-size: 12px; background: #dc2626; color: #fff; border: 1px solid #dc2626; border-radius: 4px; white-space: nowrap;" title="点击取消敏货">敏货</button>' +
+ '<span id="select-badge-' + id + '" style="display: none; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; background: var(--accent); color: #fff;">已选</span>' +
+ '</div>' +
+ '</div>';
+
+ container.appendChild(div);
+
+ // 高亮新包裹 2 秒
+ div.style.border = '3px dashed var(--warning)';
+ div.style.background = 'rgba(245,158,11,0.08)';
+ setTimeout(function() {
+ div.style.border = '2px solid var(--border)';
+ div.style.background = 'var(--bg-card)';
+ }, 2000);
+
+ // 更新所有计数
+ updateScanCounts();
+ updateDistribution();
+
+ // 滚动到新包裹
+ div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+ }
+
+ // 初始加载时更新按钮状态
+ document.addEventListener('DOMContentLoaded', function() {
+ setTimeout(updateDistribution, 100);
+ });
+
+// ===== 拼单合并（打包操作界面内） =====
+// 从 URL 路径提取客户ID（/pack/<id>），避免依赖变量失效
+// v3 fixed - 2026-07-23
+function _getPackMergeMainId() {
+ var m = window.location.pathname.match(/\/pack\/(\d+)/);
+ return m ? m[1] : null;
+}
+function showMergePackModal() {
+ var mainId = _getPackMergeMainId();
+ if (!mainId) { showToast('无法识别当前客户，请刷新页面', 'error'); return; }
+ var html = '<div id="merge-pack-modal-p" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)closeMergePackModal()">' +
+    '<div style="background:#fff;border-radius:12px;padding:24px;width:480px;max-width:95%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
+    '<h3 style="margin:0 0 8px 0;">拼单合并 - {{ customer.name }}</h3>' +
+    '<p style="font-size:13px;color:#64748b;margin-bottom:12px;">搜索并选择一个次客户，双方包裹合并一起打包。标签格式：<strong>{{ customer.name }}（次客户）</strong>，账单记{{ customer.name }}名下。</p>' +
+    '<input type="text" id="pack-merge-search" placeholder="输入客户姓名或条码搜索..." oninput="searchPackMerge()" onkeydown="if(event.key==\'Escape\')closeMergePackModal()" style="width:100%;padding:10px 14px;border:2px solid #0d47a1;border-radius:8px;font-size:15px;" autofocus>' +
+    '<div id="pack-merge-results" data-main-id="' + mainId + '" style="max-height:240px;overflow-y:auto;margin-top:8px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;"></div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">' +
+    '<button onclick="closeMergePackModal()" style="padding:8px 20px;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer;">取消</button></div></div></div>';
+  document.body.insertAdjacentHTML("beforeend", html);
+  document.getElementById("pack-merge-search").focus();
+}
+async function searchPackMerge() {
+  var val = (document.getElementById("pack-merge-search").value||"").trim();
+  var box = document.getElementById("pack-merge-results");
+  var mainId = box.dataset.mainId;
+  if (val.length < 1) { box.innerHTML = ""; return; }
+  try {
+    var resp = await fetch("/api/customers/search?q=" + encodeURIComponent(val));
+    var data = await resp.json();
+    box.innerHTML = data.filter(function(c) { return c.id != mainId; }).slice(0,10).map(function(c) {
+      return '<div onclick="doPackMerge(' + mainId + ',' + c.id + ',\'' + c.name.replace(/\'/g,"\\'") + '\')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #e2e8f0;font-size:14px;" onmouseenter="this.style.background=\'#eef2ff\'" onmouseleave="this.style.background=\'\'">' +
+        c.name + ' <span style="color:#818cf8;font-size:11px;background:#e0e7ff;padding:2px 6px;border-radius:3px;">' + (c.barcode||"") + '</span>' +
+        '<span style="color:#94a3b8;font-size:11px;margin-left:4px;">' + (c.address||"") + '</span></div>';
+    }).join("");
+    if (!data.length) box.innerHTML = '<div style="padding:12px;color:#94a3b8;text-align:center;">未找到匹配客户</div>';
+  } catch(e) { box.innerHTML = '<div style="padding:12px;color:#dc2626;">搜索失败</div>'; }
+}
+function doPackMerge(mainId, secId, secName) {
+  closeMergePackModal();
+  window.location.href = "/pack/" + mainId + "?secondary_ids=" + secId;
+}
+function closeMergePackModal() {
+ var m = document.getElementById("merge-pack-modal-p");
+ if (m) m.remove();
+}
+
+// ===== 二次扫描未扫到：标记丢失并继续 =====
+let _lostConfirmMissing = [];
+let _lostCallback = null;
+function showLostConfirm(missingPackages, callback) {
+ _lostConfirmMissing = missingPackages;
+ _lostCallback = callback || null;
+ const list = missingPackages.map(p => `<li style="padding:3px 0; font-size:12px; color:#475569;">${p.tracking_number || ''} <span style="color:#94a3b8;">${p.customer_remark ? '· '+p.customer_remark : ''}</span></li>`).join('');
+ const html = `
+ <div id="lost-confirm-modal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center;">
+ <div style="background:#fff; border-radius:12px; padding:24px; width:480px; max-width:92%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+ <h3 style="margin:0 0 8px 0; font-size:16px; color:#b91c1c;">有 ${missingPackages.length} 件未扫描</h3>
+ <p style="font-size:13px; color:var(--muted); margin:0 0 12px 0;">以下包裹还未二次扫描。是否标记为「丢失」并继续打包？标记后这些单号会从本批打包中剔除，并记录在「单号管理 → 丢失单号」。</p>
+ <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:8px 12px; max-height:180px; overflow-y:auto; margin-bottom:16px;">
+ <ul style="list-style:none; margin:0; padding:0;">${list}</ul>
+ </div>
+ <div style="display:flex; gap:8px; justify-content:flex-end;">
+ <button onclick="closeLostConfirm()" style="padding:8px 16px; border:1px solid #d1d5db; background:#fff; border-radius:6px; cursor:pointer; font-size:13px;">返回继续扫描</button>
+ <button onclick="confirmLostAndContinue()" style="padding:8px 16px; background:#b91c1c; color:#fff; border:1px solid #b91c1c; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">标记丢失并继续</button>
+ </div>
+ </div>
+ </div>`;
+ document.body.insertAdjacentHTML('beforeend', html);
+}
+function closeLostConfirm() {
+ const m = document.getElementById('lost-confirm-modal');
+ if (m) m.remove();
+}
+async function confirmLostAndContinue() {
+ const ids = _lostConfirmMissing.map(p => p.id);
+ const callback = _lostCallback;
+ closeLostConfirm();
+ // 二次确认：防止误点
+ if (!confirm(`确定将这 ${ids.length} 条单号标记为丢失？\n\n标记后将从本批打包中剔除，可在「单号管理 → 丢失单号」中查看或恢复。`)) return;
+ try {
+ const result = await apiRequest('/api/inbound/mark_lost', {
+ method: 'POST',
+ body: JSON.stringify({ package_ids: ids })
+ });
+ showToast(result.message || `已标记 ${ids.length} 条为丢失`, 'success');
+ } catch (e) {
+ showToast(e.message || '标记失败', 'error');
+ return;
+ }
+ // 继续后续流程（正常打包 or VIP 单独打包）
+ if (callback) callback();
+}
+</script>
+{% endblock %}

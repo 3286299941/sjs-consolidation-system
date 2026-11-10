@@ -1,0 +1,846 @@
+{% extends "base.html" %}
+{% block title %}{% endblock %}
+{% block content %}
+<style>
+/* */
+.wh-title {
+font-size: 20px; font-weight: 700; margin-bottom: 4px;
+display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.wh-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); }
+.wh-stats b { color: #1565c0; }
+.wh-subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
+
+/* 3×3 */
+.shelf-map {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 14px;
+margin-bottom: 28px;
+}
+.shelf-card {
+background: var(--bg-card);
+border: 1px solid var(--border);
+border-radius: var(--radius-lg);
+overflow: hidden;
+box-shadow: var(--shadow);
+}
+.shelf-card-header {
+padding: 10px 14px;
+font-weight: 700;
+font-size: 15px;
+background: linear-gradient(135deg, #1565c0, #0d47a1);
+color: #fff;
+display: flex; align-items: center; justify-content: space-between;
+}
+.shelf-card-header .shelf-total {
+font-size: 12px;
+background: rgba(255,255,255,0.2);
+border-radius: 20px;
+padding: 3px 10px;
+font-weight: 600;
+}
+.shelf-card-header .shelf-addr {
+font-size: 11px;
+opacity: 0.8;
+flex: 1;
+margin-left: 6px;
+}
+
+/* */
+.floor-group { padding: 8px 10px; }
+.floor-row {
+border: 1px solid var(--border);
+border-radius: var(--radius);
+margin-bottom: 6px;
+overflow: hidden;
+}
+.floor-header {
+display: flex; align-items: center; padding: 5px 10px;
+background: #f8fafc; font-size: 11px; font-weight: 700; color: var(--text-secondary);
+gap: 6px; border-bottom: 1px solid var(--border);
+cursor: default;
+}
+.floor-header .dot { width: 5px; height: 5px; border-radius: 50%; background: #94a3b8; }
+.floor-header .dot.active { background: #1565c0; }
+.zones-row { display: flex; align-items: center; gap: 3px; padding: 4px 6px; flex-wrap: nowrap; overflow-x: hidden; }
+
+/* — 格子统一大小 */
+.zone-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 36px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+}
+.zone-cell:hover { opacity: 0.85; transform: translateY(-1px); }
+.zone-label {
+display: inline-block;
+padding: 2px 8px;
+border-radius: 4px;
+font-size: 11px;
+font-weight: 600;
+background: #d1d5db;
+color: #374151;
+flex-shrink: 0;
+line-height: 1.4;
+}
+.zone-cell.incoming .zone-label { background: #d97706; color: #fff; }
+.zone-cell.pending .zone-label,
+.zone-cell.assigned .zone-label { background: #1565c0; color: #fff; }
+.zone-cell.own .zone-indicator { background: #1565c0; }
+.zone-cell.other .zone-indicator { background: #1565c0; opacity: 0.45; }
+.zone-cust {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.zone-dot {
+  flex-shrink: 0;
+  opacity: 0.45;
+  font-weight: 400;
+}
+.zone-count {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+/* */
+.zone-cell { background: #f8f9fb; border-color: #dee2e6; color: #495057; }
+.zone-cell.incoming { background: #fff9ec; border-color: #f0d78c; color: #6b5a2e; }
+.zone-cell.incoming:hover { background: #fff5d9; }
+.zone-cell.pending { background: #f2faf5; border-color: #a3d9b1; color: #2d5a3f; }
+.zone-cell.pending:hover { background: #e4f5ea; }
+.zone-cell.assigned { background: #f2faf5; border-color: #a3d9b1; color: #2d5a3f; }
+.zone-cell.assigned:hover { background: #e4f5ea; }
+
+/* */
+.empty-state {
+text-align: center; padding: 60px 20px; color: var(--text-secondary);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); }
+.empty-state p { font-size: 14px; line-height: 1.8; }
+
+/* */
+.ops-panel {
+background: var(--bg-card);
+border: 1px solid var(--border);
+border-radius: var(--radius-lg);
+padding: 20px 24px;
+margin-bottom: 20px;
+box-shadow: var(--shadow);
+}
+.ops-panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--text-primary); }
+.ops-panel h3 .count { font-size: 12px; font-weight: 400; color: var(--text-secondary); margin-left: 8px; }
+.op-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.op-row .fg { display: flex; flex-direction: column; gap: 4px; }
+.op-row label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.op-row input, .op-row select {
+padding: 8px 12px;
+border: 1px solid var(--border);
+border-radius: var(--radius-sm);
+font-size: 13px;
+outline: none;
+transition: border-color 0.15s;
+min-width: 140px;
+background: var(--bg-card);
+color: var(--text-primary);
+}
+.op-row input:focus, .op-row select:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.btn-primary {
+padding: 9px 20px;
+background: linear-gradient(135deg, #667eea, #764ba2);
+color: #fff; border: none; border-radius: var(--radius-sm);
+font-size: 13px; font-weight: 600; cursor: pointer;
+transition: opacity 0.15s; white-space: nowrap;
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-danger {
+padding: 9px 16px;
+background: #fef2f2; color: var(--danger);
+border: 1px solid #fca5a5; border-radius: var(--radius-sm);
+font-size: 13px; font-weight: 600; cursor: pointer;
+transition: all 0.15s; white-space: nowrap;
+}
+.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-warn {
+padding: 9px 16px;
+background: #fffbeb; color: #b45309;
+border: 1px solid #fcd34d; border-radius: var(--radius-sm);
+font-size: 13px; font-weight: 600; cursor: pointer;
+transition: all 0.15s; white-space: nowrap;
+}
+.btn-warn:hover { background: #f59e0b; color: #fff; }
+
+/* */
+#msg-bar {
+display: none;
+padding: 10px 16px;
+border-radius: var(--radius);
+font-size: 13px; font-weight: 500;
+margin-bottom: 12px;
+}
+#msg-bar.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+#msg-bar.error { background: #fee2e2; color: #7f1d1d; border: 1px solid #fca5a5; }
+#msg-bar.info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+
+/* */
+.modal-overlay {
+display: none;
+position: fixed; inset: 0;
+background: rgba(0,0,0,0.45);
+z-index: 1000;
+align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+background: #fff; border-radius: var(--radius-lg); padding: 0;
+width: 640px; max-width: 94vw; max-height: 82vh;
+display: flex; flex-direction: column;
+box-shadow: 0 20px 60px rgba(0,0,0,0.2); overflow: hidden;
+}
+.modal-header {
+padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
+display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.modal-header h2 { font-size: 16px; font-weight: 700; }
+.modal-close {
+width: 32px; height: 32px;
+border: none; background: #f1f5f9; border-radius: 50%;
+cursor: pointer; font-size: 18px; line-height: 32px;
+text-align: center; color: var(--text-secondary); transition: all 0.15s;
+z-index: 9999; flex-shrink: 0; pointer-events: auto;
+}
+.modal-close:hover { background: var(--danger); color: #fff; }
+.modal-body { padding: 16px 22px; overflow-y: auto; flex: 1; }
+.pkg-list { display: flex; flex-direction: column; gap: 8px; }
+.pkg-item {
+padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.pkg-item:hover { border-color: var(--accent); background: #fafbff; }
+.pkg-info { flex: 1; min-width: 0; }
+.pkg-tn { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.pkg-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.pkg-badge {
+display: inline-block; padding: 2px 8px; border-radius: 20px;
+font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.badge-normal { background: #d1fae5; color: #065f46; }
+.badge-danger { background: #fee2e2; color: #991b1b; }
+.badge-pending { background: #fef3c7; color: #92400e; }
+.modal-empty { text-align: center; padding: 32px; color: var(--text-muted); font-size: 14px; }
+
+.selected-zone { outline: 3px solid #667eea; outline-offset: -1px; border-radius: var(--radius); z-index: 1; }
+</style>
+
+<div>
+<div class="wh-title">
+            仓库管理
+            <span class="wh-stats">
+<span>已占用 <b>{{ total_active }}</b> 个区位</span>
+<span>共 <b>{{ shelf_count }}</b> 架货架</span>
+<span>已分配 <b>{{ total_assigned }}</b>/{{ shelf_count * 20 }} 个客户</span>
+</span>
+</div>
+<div class="wh-subtitle">
+4×5(1~5) · {% if shelf_count > 0 %}{{ shelf_count * 20 }}{% else %}0{% endif %} · + · 3×3
+<span style="color:#f59e0b"></span>
+<span style="color:#166534"></span>
+<span style="color:#22c55e"></span>
+<span style="color:#f59e0b" id="unassigned-badge">⏳ <b id="unassigned-count">0</b> </span>
+</div>
+
+<!-- -->
+<div class="ops-panel">
+<h3>货架分配操作</h3>
+<div id="msg-bar"></div>
+<div class="op-row" style="margin-bottom:14px">
+<button class="btn-primary" style="background:linear-gradient(135deg,#1565c0,#0d47a1)" onclick="assignShelvesByAddress()" id="btn-addr">按地址分配</button>
+<button class="btn-primary" style="background:linear-gradient(135deg,#1565c0,#0d47a1)" onclick="autoAssign()" id="btn-auto">智能分配</button>
+<button class="btn-primary" style="background:linear-gradient(135deg,#0d47a1,#083386)" onclick="cleanupEmptySlots()" id="btn-cleanup">清理空货位</button>
+</div>
+{% if has_address_assignment %}
+<div class="op-row" style="margin-bottom:14px">
+<div class="fg">
+<label></label>
+<select id="op-customer" onchange="onCustomerChange()" style="min-width:200px">
+<option value="">-- 选择客户 --</option>
+</select>
+</div>
+<div class="fg">
+<label></label>
+<input type="text" id="op-slot" placeholder="点击货架选择区位" readonly style="width:180px;cursor:pointer;background:#f8fafc">
+</div>
+<button class="btn-primary" onclick="assignCustomer()">分配</button>
+<button class="btn-danger" onclick="unassignCustomer()">解除分配</button>
+</div>
+<div class="op-row">
+<div class="fg">
+<label></label>
+<input type="text" id="op-tracking" placeholder="输入快递单号快速定位" autocomplete="off">
+</div>
+<button class="btn-warn" onclick="findAndAssign()">查找并分配</button>
+</div>
+{% endif %}
+</div>
+
+{% if not has_address_assignment %}
+<!-- -->
+<div class="empty-state">
+<div class="icon">📦</div>
+<h3>暂无货架数据</h3>
+<p>请先 <b>按地址分配货架</b> 或 <b>智能分配</b> 生成货架<br>系统将根据客户收货地址自动创建货架</p>
+</div>
+{% else %}
+<!-- 3×3 -->
+<div class="shelf-map">
+{% for sc in shelf_order %}
+{% set sd = shelf_data.get(sc, {'slots_by_floor': {}, 'address': ''}) %}
+{% set floors = sd.slots_by_floor %}
+<div class="shelf-card">
+<div class="shelf-card-header">
+<span> {{ sc }}</span>
+<span class="shelf-addr">{{ sd.address }}</span>
+{% set total_cnt = namespace(n=0) %}
+{% set max_fl = floors.keys()|list|sort|last if floors else 4 %}
+{% for fl in range(1, max_fl + 1) %}
+{% for z in floors.get(fl, []) %}
+{% set total_cnt.n = total_cnt.n + slot_info.get(z.id, {}).get('count', 0) %}
+{% endfor %}
+{% endfor %}
+<span class="shelf-total">{{ total_cnt.n }} 件</span>
+</div>
+<div class="floor-group">
+{% for fl in range(1, max_fl + 1) %}
+{% set floor_zones = floors.get(fl, []) %}
+{% if floor_zones %}
+{% set has_pkg = namespace(f=False) %}
+{% for z in floor_zones %}
+{% if slot_info.get(z.id, {}).get('count', 0) > 0 %}{% set has_pkg.f = True %}{% endif %}
+{% endfor %}
+<div class="floor-row">
+<div class="floor-header">
+<span class="dot {% if has_pkg.f %}active{% endif %}"></span>
+{{ fl }} 层
+</div>
+<div class="zones-row">
+{% for z in floor_zones %}
+{% set info = slot_info.get(z.id, {'count': 0, 'count_incoming': 0, 'count_pending': 0, 'customer_name': '', 'customer_id': None}) %}
+{% set css = '' %}
+{% if info.count_pending > 0 %} {% set css = 'pending' %}
+{% elif info.count_incoming > 0 %} {% set css = 'incoming' %}
+{% elif info.customer_id %} {% set css = 'assigned' %}
+{% endif %}
+<div class="zone-cell {{ css }}"
+     data-slot="{{ z.slot_label }}"
+     data-cust-name="{{ info.customer_name }}"
+     data-cust-id="{{ info.customer_id or 'null' }}"
+     data-count="{{ info.count }}"
+     title="{{ z.slot_label }}{% if info.customer_name %}: {{ info.customer_name }}{% endif %} · {{ info.count }}{% if info.count_incoming > 0 %}{{ info.count_incoming }}{% endif %}{% if info.count_pending > 0 %}{{ info.count_pending }}{% endif %}">
+    {% if info.customer_name %}
+    <span class="zone-cust">{{ info.customer_name[:6] }}{% if info.customer_name|length > 6 %}..{% endif %}</span>
+    {% if info.count > 0 %}<span class="zone-dot">·</span><span class="zone-count">{{ info.count }}件</span>{% endif %}
+    {% elif info.count > 0 %}
+    <span class="zone-count">{{ info.count }}件</span>
+    {% endif %}
+</div>
+{% endfor %}
+</div>
+</div>
+{% endif %}
+{% endfor %}
+</div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+</div>
+
+<!-- -->
+<div class="modal-overlay" id="modal">
+<div class="modal-box">
+<div class="modal-header">
+<h2 id="modal-title">区位详情</h2>
+<button class="modal-close" type="button" id="modal-close-btn" onmousedown="var m=document.getElementById('modal');if(m)m.classList.remove('open');event.stopPropagation();event.preventDefault();">×</button>
+</div>
+<div class="modal-body"><div id="modal-content">…</div></div>
+</div>
+</div>
+
+<script>
+let selectedSlots = new Set();
+let customers = [];
+let customerMap = {};
+let unassignedCustomers = [];
+
+// 
+let isDragSelect = false;
+let dragStartCell = null;
+let dragMoved = false;
+let preDragSelection = new Set(); // vs 
+document.addEventListener('DOMContentLoaded', () => {
+const map = document.querySelector('.shelf-map');
+if (!map) return;
+
+map.addEventListener('pointerdown', (e) => {
+const cell = e.target.closest('.zone-cell');
+if (!cell || e.button !== 0) return;
+isDragSelect = true;
+dragStartCell = cell;
+dragMoved = false;
+e.preventDefault(); // 
+
+// → 
+const label = cell.dataset.slot;
+if (!selectedSlots.has(label)) {
+selectedSlots.clear();
+document.querySelectorAll('.zone-cell').forEach(el => el.classList.remove('selected-zone'));
+}
+// 
+preDragSelection = new Set(selectedSlots);
+
+selectedSlots.add(label);
+cell.classList.add('selected-zone');
+document.getElementById('op-slot').value = Array.from(selectedSlots).join(', ');
+});
+
+document.addEventListener('pointermove', (e) => {
+if (!isDragSelect) return;
+// 5px
+if (dragStartCell) {
+const dr = dragStartCell.getBoundingClientRect();
+const dx = e.clientX - (dr.left + dr.width / 2);
+const dy = e.clientY - (dr.top + dr.height / 2);
+if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+dragMoved = true;
+}
+}
+if (!dragMoved) return;
+
+const cell = document.elementFromPoint(e.clientX, e.clientY)?.closest('.zone-cell');
+if (!cell) return;
+const label = cell.dataset.slot;
+if (!selectedSlots.has(label)) {
+selectedSlots.add(label);
+cell.classList.add('selected-zone');
+document.getElementById('op-slot').value = Array.from(selectedSlots).join(', ');
+}
+});
+
+document.addEventListener('pointerup', (e) => {
+if (!isDragSelect) return;
+isDragSelect = false;
+
+// cell= 
+const endCell = document.elementFromPoint(e.clientX, e.clientY)?.closest('.zone-cell');
+if (!dragMoved && dragStartCell === endCell) {
+// → 
+openSlotDetail(
+dragStartCell.dataset.slot,
+dragStartCell.dataset.custName || '',
+dragStartCell.dataset.custId ? parseInt(dragStartCell.dataset.custId) : null,
+parseInt(dragStartCell.dataset.count) || 0
+);
+}
+dragStartCell = null;
+preDragSelection.clear();
+});
+});
+
+// 
+async function init() {
+await loadCustomers();
+await loadUnassignedCount();
+}
+
+// 
+async function loadUnassignedCount() {
+try {
+const res = await fetch('/api/warehouse/unassigned_count');
+const json = await res.json();
+if (json.success) {
+document.getElementById('unassigned-count').textContent = json.data.count;
+}
+} catch(e) {}
+}
+
+// 
+async function loadUnassignedCustomers() {
+try {
+const res = await fetch('/api/warehouse/unassigned_customers');
+const json = await res.json();
+if (json.success) {
+unassignedCustomers = json.data.customers;
+}
+} catch(e) { unassignedCustomers = []; }
+}
+init();
+
+// 
+async function loadCustomers() {
+try {
+const res = await fetch('/api/warehouse/customers');
+const json = await res.json();
+if (json.success) {
+customers = json.data.customers;
+customerMap = {};
+const sel = document.getElementById('op-customer');
+sel.innerHTML = '<option value="">-- ' + customers.length + '--</option>';
+customers.forEach(c => {
+customerMap[c.id] = c;
+const assigned = c.assigned_slots.length > 0 ? ` [: ${c.assigned_slots.join(', ')}]` : '';
+sel.innerHTML += `<option value="${c.id}">${c.name} · ${c.package_count}${assigned}</option>`;
+});
+}
+} catch(e) { console.error('', e); }
+}
+
+function onCustomerChange() {
+const cid = parseInt(document.getElementById('op-customer').value);
+if (cid && customerMap[cid] && customerMap[cid].assigned_slots.length > 0) {
+// 
+const assignedSlots = customerMap[cid].assigned_slots;
+selectedSlots.clear();
+assignedSlots.forEach(sl => selectedSlots.add(sl));
+document.querySelectorAll('.zone-cell').forEach(el => el.classList.remove('selected-zone'));
+selectedSlots.forEach(sl => {
+const el = document.querySelector(`[data-slot="${sl}"]`);
+if (el) el.classList.add('selected-zone');
+});
+document.getElementById('op-slot').value = assignedSlots.join(', ');
+}
+}
+
+async function openSlotDetail(label, custName, custId, count) {
+document.getElementById('modal-title').textContent = ` ${label}`;
+document.getElementById('modal-content').innerHTML = '<div class="modal-empty">…</div>';
+document.getElementById('modal').classList.add('open');
+
+// 
+await loadUnassignedCustomers();
+
+try {
+const res = await fetch('/api/warehouse/slots');
+const json = await res.json();
+const slots = json.data.slots;
+const slot = slots.find(s => s.slot_label === label);
+if (!slot) throw new Error('');
+const slotId = slot.id;
+
+const res2 = await fetch(`/api/warehouse/slot/${slotId}`);
+const j2 = await res2.json();
+if (!j2.success) throw new Error(j2.message);
+const d = j2.data;
+
+let header = '';
+if (custName) {
+const slotsArr = Array.from(selectedSlots);
+const slotsHint = slotsArr.length > 1 ? ` ${slotsArr.join(', ')}` : '';
+header = `<div style="margin-bottom:12px;font-size:14px;font-weight:600;color:#166534">
+ 📍 ${custName}${slotsHint}
+ <button onclick="unassignSlot('${label}')" style="margin-left:12px;padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;font-size:12px"> 解除分配</button>
+ </div>`;
+}
+
+// 
+let quickAssignHtml = '';
+let matchingCustomers = [];
+let shelfAddr = d.address_label || '';
+unassignedCustomers.forEach(c => {
+let custAddr = (c.address || '').trim().toLowerCase();
+let sAddr = shelfAddr.trim().toLowerCase();
+// 
+if (sAddr && custAddr && (sAddr.includes(custAddr) || custAddr.includes(sAddr))) {
+matchingCustomers.push(c);
+}
+});
+
+if (matchingCustomers.length > 0) {
+const slotsArr = Array.from(selectedSlots);
+const slotLabel = slotsArr.length > 1 ? `${slotsArr[0]} 等 ${slotsArr.length} 个区位` : label;
+ quickAssignHtml = `<div style="margin-bottom:14px;padding:12px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:var(--radius)">
+ <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#92400e"> 📍 ${matchingCustomers.length} 个匹配「${shelfAddr}」的客户</div>
+ <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+ <select id="quick-customer" style="flex:1;min-width:180px;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+ <option value="">-- 选择客户 --</option>`;
+matchingCustomers.forEach(c => {
+ let selected = (c.id === custId) ? ' selected' : '';
+ quickAssignHtml += `<option value="${c.id}"${selected}>${c.name} · ${c.package_count} 件${c.address}</option>`;
+ });
+ quickAssignHtml += `</select>
+ <button onclick="quickAssignToSlot('${slotLabel}')" style="padding:7px 16px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap"> 快速分配</button>
+ </div>
+ </div>`;
+}
+
+if (d.package_count === 0) {
+document.getElementById('modal-content').innerHTML = header + quickAssignHtml + '<div class="modal-empty"> </div>';
+return;
+}
+
+let html = header + quickAssignHtml + `<div style="margin-bottom:12px;color:#64748b;font-size:13px"> <b>${d.package_count}</b> </div><div class="pkg-list">`;
+d.packages.forEach(p => {
+const natureBadge = p.nature === '' ?
+'<span class="pkg-badge badge-danger"></span>' :
+'<span class="pkg-badge badge-normal"></span>';
+const statusBadge = p.status === '' ?
+'<span class="pkg-badge badge-pending"></span>' : '';
+html += `<div class="pkg-item">
+<div class="pkg-info">
+<div class="pkg-tn">${p.tracking_number}</div>
+<div class="pkg-meta">${p.customer_name} · ${p.entry_time}${p.remark ? ' · ' + p.remark : ''}</div>
+</div>
+<div style="display:flex;gap:6px;align-items:center">${natureBadge}${statusBadge}</div>
+</div>`;
+});
+html += '</div>';
+document.getElementById('modal-content').innerHTML = html;
+} catch(e) {
+document.getElementById('modal-content').innerHTML = `<div class="modal-empty" style="color:var(--danger)">${e.message}</div>`;
+}
+}
+
+function closeModal() {
+document.getElementById('modal').classList.remove('open');
+}
+
+// — inline onclick
+document.getElementById('modal').addEventListener('click', function(e) {
+if (e.target === this) closeModal();
+});
+
+function showMsg(text, type='success') {
+const bar = document.getElementById('msg-bar');
+bar.textContent = text;
+bar.className = type;
+bar.style.display = 'block';
+setTimeout(() => { bar.style.display = 'none'; }, 4000);
+}
+
+async function assignCustomer() {
+const cid = parseInt(document.getElementById('op-customer').value);
+if (!cid) { showMsg('', 'error'); return; }
+const slots = Array.from(selectedSlots);
+if (slots.length === 0) { showMsg('', 'error'); return; }
+
+try {
+const res = await fetch('/api/warehouse/assign', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({customer_id: cid, slot_labels: slots})
+});
+const json = await res.json();
+if (json.success) {
+showMsg(json.message || '');
+setTimeout(() => location.reload(), 1200);
+} else {
+showMsg(json.message || '', 'error');
+}
+} catch(e) {
+showMsg(': ' + e.message, 'error');
+}
+}
+
+async function unassignCustomer() {
+const cid = parseInt(document.getElementById('op-customer').value);
+if (!cid) { showMsg('', 'error'); return; }
+
+try {
+const res = await fetch('/api/warehouse/unassign', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({customer_id: cid})
+});
+const json = await res.json();
+if (json.success) {
+showMsg(json.message || '');
+setTimeout(() => location.reload(), 1200);
+} else {
+showMsg(json.message || '', 'error');
+}
+} catch(e) {
+showMsg(': ' + e.message, 'error');
+}
+}
+
+async function unassignSlot(label) {
+if (!confirm(' ' + label + ' ')) return;
+try {
+const res = await fetch('/api/warehouse/unassign', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({slot_label: label})
+});
+const json = await res.json();
+if (json.success) {
+showMsg('');
+setTimeout(() => location.reload(), 800);
+} else {
+showMsg(json.message, 'error');
+}
+} catch(e) {
+showMsg('', 'error');
+}
+}
+
+// 
+async function quickAssignToSlot(slotLabel) {
+const sel = document.getElementById('quick-customer');
+const cid = parseInt(sel.value);
+if (!cid) { showMsg('', 'error'); return; }
+
+const slots = selectedSlots.size > 0 ? Array.from(selectedSlots) : (slotLabel ? [slotLabel] : []);
+if (slots.length === 0) { showMsg('', 'error'); return; }
+
+try {
+const res = await fetch('/api/warehouse/assign', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({customer_id: cid, slot_labels: slots})
+});
+const json = await res.json();
+if (json.success) {
+showMsg(json.message || '');
+setTimeout(() => location.reload(), 1200);
+} else {
+showMsg(json.message || '', 'error');
+}
+} catch(e) {
+showMsg(': ' + e.message, 'error');
+}
+}
+
+async function autoAssign() {
+if (!confirm('\n\n≥30\n10-291-2\n<101\n\n')) return;
+
+const btn = document.getElementById('btn-auto');
+btn.disabled = true;
+btn.textContent = '…';
+showMsg('…', 'info');
+
+try {
+const res = await fetch('/api/warehouse/auto_assign', {method: 'POST'});
+const json = await res.json();
+if (json.success) {
+showMsg(json.message + ` ${json.data.remaining_slots} `);
+setTimeout(() => location.reload(), 1500);
+} else {
+showMsg(json.message || '', 'error');
+}
+} catch(e) {
+showMsg(': ' + e.message, 'error');
+} finally {
+btn.disabled = false;
+btn.textContent = ' ';
+}
+}
+
+async function findAndAssign() {
+const tracking = document.getElementById('op-tracking').value.trim();
+if (!tracking) { showMsg('', 'error'); return; }
+const slots = Array.from(selectedSlots);
+if (slots.length === 0) { showMsg('', 'error'); return; }
+
+try {
+const res1 = await fetch(`/api/warehouse/find_package?tracking=${encodeURIComponent(tracking)}`);
+const j1 = await res1.json();
+if (!j1.success) { showMsg(j1.message, 'error'); return; }
+
+const res2 = await fetch('/api/warehouse/assign', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({package_id: j1.data.id, slot_label: slots[0]})
+});
+const j2 = await res2.json();
+if (j2.success) {
+showMsg(j2.message || '');
+document.getElementById('op-tracking').value = '';
+setTimeout(() => location.reload(), 1000);
+} else {
+showMsg(j2.message, 'error');
+}
+} catch(e) {
+showMsg(': ' + e.message, 'error');
+}
+}
+
+async function assignShelvesByAddress() {
+const msg = '\n\n' +
+' "-1""-1"\n' +
+' 4×5 = 20\n' +
+' \n\n' +
+'';
+if (!confirm(msg)) return;
+
+const btn = document.getElementById('btn-addr');
+btn.disabled = true;
+btn.textContent = '…';
+showMsg('…', 'info');
+
+try {
+const res = await fetch('/api/warehouse/assign_shelves_by_address', {method: 'POST'});
+const json = await res.json();
+if (json.success) {
+let detail = json.data.plan.map(p =>
+` ${p.address}: ${p.shelves.join(', ')} (${p.item_count}, ${p.pct}%, ${p.customer_count})`
+).join('\n');
+showMsg(json.message + '\n\n' + detail, 'info');
+setTimeout(() => location.reload(), 2500);
+} else {
+showMsg(json.message || '', 'error');
+}
+} catch(e) {
+showMsg(': ' + e.message, 'error');
+} finally {
+btn.disabled = false;
+btn.textContent = ' ';
+}
+}
+
+document.addEventListener('keydown', function(e) {
+if (e.key === 'Escape') closeModal();
+});
+document.getElementById('op-tracking').addEventListener('keydown', function(e) {
+if (e.key === 'Enter') findAndAssign();
+});
+
+async function cleanupEmptySlots() {
+if (!confirm('\u786e\u5b9a\u8981\u6e05\u7406\u7a7a\u8d27\u4f4d\u5417\uff1f\n\n\u5c06\u89e3\u9664\u6240\u6709\u6ca1\u6709\u5df2\u5165\u5e93\u5305\u88f9\u7684\u5ba2\u6237\u8d27\u4f4d\u5173\u8054\u3002')) return;
+
+const btn = document.getElementById('btn-cleanup');
+btn.disabled = true;
+btn.textContent = '\u6e05\u7406\u4e2d\u2026';
+showMsg('\u6b63\u5728\u626b\u63cf\u7a7a\u8d27\u4f4d\u2026', 'info');
+
+try {
+const res = await fetch('/api/warehouse/cleanup_empty_slots', {method: 'POST'});
+const json = await res.json();
+if (json.success) {
+showMsg(json.message || '\u6e05\u7406\u5b8c\u6210', 'success');
+setTimeout(() => location.reload(), 1500);
+} else {
+showMsg(json.message || '\u6e05\u7406\u5931\u8d25', 'error');
+}
+} catch(e) {
+showMsg('\u7f51\u7edc\u9519\u8bef: ' + e.message, 'error');
+} finally {
+btn.disabled = false;
+btn.textContent = '\u6e05\u7406\u7a7a\u8d27\u4f4d';
+}
+}
+</script>
+{% endblock %}

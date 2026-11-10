@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>速捷供应链 · 集运管理系统 - 登录</title>
+ <style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; background: #eef2f7; color: #1e293b; margin: 0; min-width: 1280px; overflow-x: auto; }
+.page-head { text-align: center; padding: 22px 0 6px; }
+.page-head h1 { font-size: 18px; color: #0a2540; font-weight: 700; }
+.page-head p { font-size: 13px; color: #64748b; margin-top: 4px; }
+.section { max-width: 1200px; margin: 16px auto; }
+.section-title { font-size: 13px; color: #64748b; margin: 8px 0 10px; padding-left: 12px; border-left: 3px solid #0d47a1; font-weight: 500; }
+
+.stage {
+ position: relative; overflow: hidden;
+ min-height: 100vh; min-width: 1280px; padding: 0 70px;
+ background:
+   radial-gradient(circle at 20% 18%, rgba(255,255,255,0.30), transparent 55%),
+   radial-gradient(circle at 82% 30%, rgba(140,170,255,0.30), transparent 50%),
+   linear-gradient(180deg, #3a63cf 0%, #2d52b6 45%, #214199 100%);
+ display: flex; align-items: center;
+}
+.stage::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #1b2f9e 0%, #2450c8 40%, #f08020 100%); z-index: 5; }
+/* 背景锁定画布：固定 1600px，缩放/缩窗口时背景不随窗口变形，超出部分裁剪 */
+.bg-canvas { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 1600px; height: 100vh; overflow: hidden; z-index: 0; }
+.stars { position: absolute; inset: 0; pointer-events: none; }
+.stars .st { fill: #ffffff; }
+.stars .st-gold { fill: #fcd34d; }
+@keyframes twinkle { 0%,100% { opacity: 0.25; } 50% { opacity: 1; } }
+.tw { animation: twinkle 3.2s ease-in-out infinite; }
+.tw2 { animation: twinkle 4.6s ease-in-out 1.2s infinite; }
+.tw3 { animation: twinkle 3.8s ease-in-out 2.1s infinite; }
+
+/* ===== 圆形地球概念图 ===== */
+.earth-canvas { position: absolute; left: 130px; top: 50%; transform: translateY(-50%); width: 480px; height: 480px; z-index: 1; }
+.earth-concept { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.earth-concept svg { width: 100%; height: 100%; display: block; }
+.earth-concept::before { content: ""; position: absolute; inset: -18px; border-radius: 50%; box-shadow: 0 0 38px 10px rgba(125,211,252,0.5), 0 0 80px 26px rgba(96,165,250,0.25); }
+/* 静态高级线条地球 */
+
+/* ===== 背景线条装饰（飞机/轮船） ===== */
+.deco { position: absolute; pointer-events: none; z-index: 1; }
+.deco svg { display: block; width: 100%; height: auto; overflow: visible; }
+.deco .stroke { fill: none; stroke: rgba(255,255,255,0.85); }
+.deco .stroke-thin { fill: none; stroke: rgba(255,255,255,0.5); }
+.deco .stroke-faint { fill: none; stroke: rgba(255,255,255,0.35); }
+@keyframes float-x { 0%,100% { transform: translateX(0); } 50% { transform: translateX(10px); } }
+.deco-float { animation: float-x 6s ease-in-out infinite; }
+
+/* ===== 背景渐变粒子光效 ===== */
+.particles { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.particles .p { position: absolute; border-radius: 50%; pointer-events: none; }
+@keyframes float-y { 0%,100% { transform: translateY(0); opacity: 0.35; } 50% { transform: translateY(-22px); opacity: 0.85; } }
+.particles .p { animation: float-y 7s ease-in-out infinite; }
+/* 前景粒子（在地球前面，更大更亮） */
+.particles-front { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.particles-front .p { position: absolute; border-radius: 50%; pointer-events: none; animation: float-y 9s ease-in-out infinite; }
+
+/* 右侧卡片 */
+.side { position: fixed; right: 60px; top: 50%; transform: translateY(-50%); padding: 40px 15px 40px 30px; display: flex; align-items: center; z-index: 2; }
+.card {
+ background: rgba(255,255,255,0.96); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+ border-radius: 18px; padding: 38px 36px 32px; width: 100%;
+ box-shadow: 0 20px 60px rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.4);
+}
+.card .brand { text-align: center; margin-bottom: 24px; }
+.card .brand img { width: 100%; max-width: 220px; height: auto; display: block; margin: 0 auto; }
+.card .brand .name { margin-top: 8px; font-size: 12px; color: #94a3b8; letter-spacing: 5px; }
+.card .fg { margin-bottom: 16px; position: relative; }
+.card .fg .ic { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #94a3b8; }
+.card .fg input { width: 100%; padding: 11px 0 11px 28px; border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 14px; outline: none; background: transparent; transition: border-color .25s; }
+.card .fg input:focus { border-bottom-color: #2450c8; }
+.card .fg:focus-within .ic { color: #2450c8; }
+.card .btn { width: 100%; padding: 12px; margin-top: 8px; border: none; border-radius: 10px; background: linear-gradient(135deg, #1b2f9e, #2f6ae0); color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 6px; cursor: pointer; box-shadow: 0 4px 14px rgba(27,47,158,0.25); }
+.card .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(27,47,158,0.35); }
+@media (max-width: 900px) {
+ .stage { flex-direction: column; min-height: 860px; }
+ .illust { flex: 0 0 440px; }
+ .earth-concept { width: 300px; height: 300px; }
+ .side { flex: 1; padding: 0 24px 30px; }
+}
+
+.error-msg { background: rgba(220,38,38,0.10); color: #dc2626; padding: 10px 14px; border-radius: 9px; margin-bottom: 16px; font-size: 13px; text-align: center; border: 1px solid rgba(220,38,38,0.18); }
+ </style>
+</head>
+<body>
+ <div class="stage">
+<div class="bg-canvas">
+
+<!-- 星空 -->
+<svg class="stars" viewBox="0 0 1200 660" preserveAspectRatio="xMidYMid slice" style="position:absolute; inset:0; width:100%; height:100%; opacity:0.35;">
+ <g class="st" opacity="0.9">
+  <circle cx="80" cy="90" r="1.4"/><circle cx="200" cy="160" r="1"/><circle cx="320" cy="80" r="1.6"/><circle cx="450" cy="170" r="1.1"/><circle cx="580" cy="100" r="1.4"/><circle cx="710" cy="190" r="1"/><circle cx="840" cy="80" r="1.5"/><circle cx="970" cy="160" r="1.1"/><circle cx="1100" cy="100" r="1.4"/>
+  <circle cx="120" cy="300" r="1.2"/><circle cx="250" cy="350" r="1"/><circle cx="380" cy="280" r="1.4"/><circle cx="510" cy="360" r="1"/><circle cx="640" cy="300" r="1.3"/><circle cx="770" cy="350" r="1"/><circle cx="900" cy="280" r="1.4"/><circle cx="1030" cy="360" r="1"/><circle cx="1160" cy="300" r="1.2"/>
+  <circle cx="60" cy="490" r="1.4"/><circle cx="190" cy="540" r="1"/><circle cx="320" cy="470" r="1.5"/><circle cx="450" cy="550" r="1.1"/><circle cx="580" cy="490" r="1.3"/><circle cx="710" cy="540" r="1"/><circle cx="840" cy="470" r="1.5"/><circle cx="970" cy="550" r="1.1"/><circle cx="1100" cy="490" r="1.3"/>
+ </g>
+ <g>
+  <circle class="st tw" cx="160" cy="120" r="2.2"/>
+  <circle class="st-gold tw2" cx="300" cy="220" r="2.4"/>
+  <circle class="st tw3" cx="520" cy="80" r="2"/>
+  <circle class="st-gold tw" cx="680" cy="270" r="2.2"/>
+  <circle class="st tw2" cx="860" cy="140" r="2.4"/>
+  <circle class="st-gold tw3" cx="1030" cy="250" r="2"/>
+  <circle class="st tw" cx="110" cy="380" r="2"/>
+  <circle class="st-gold tw2" cx="400" cy="450" r="2.2"/>
+  <circle class="st tw3" cx="630" cy="400" r="2"/>
+  <circle class="st-gold tw" cx="800" cy="480" r="2"/>
+  <circle class="st tw2" cx="980" cy="410" r="2.2"/>
+  <circle class="st tw3" cx="80" cy="570" r="2"/>
+ </g>
+
+</svg>
+
+<svg class="city" viewBox="0 0 1420 240" preserveAspectRatio="xMidYMid slice" style="position:absolute; bottom:0; left:0; width:100%; height:220px; pointer-events:none;"><rect x="0" y="186" width="80" height="54" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="0" y1="186" x2="80" y2="186" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="90" y="165" width="87" height="75" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="90" y1="165" x2="177" y2="165" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="194" y="183" width="54" height="57" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="194" y1="183" x2="248" y2="183" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="281" y="114" width="46" height="126" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="281" y1="114" x2="327" y2="114" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="360" y="189" width="74" height="51" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="360" y1="189" x2="434" y2="189" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="462" y="196" width="67" height="44" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="462" y1="196" x2="529" y2="196" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="539" y="173" width="45" height="67" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="539" y1="173" x2="584" y2="173" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="601" y="123" width="72" height="117" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="601" y1="123" x2="673" y2="123" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="683" y="175" width="75" height="65" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="683" y1="175" x2="758" y2="175" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="790" y="111" width="81" height="129" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="790" y1="111" x2="871" y2="111" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="898" y="172" width="66" height="68" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="898" y1="172" x2="964" y2="172" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="988" y="165" width="77" height="75" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="988" y1="165" x2="1065" y2="165" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="1100" y="180" width="40" height="60" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="1100" y1="180" x2="1140" y2="180" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="1172" y="157" width="67" height="83" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="1172" y1="157" x2="1239" y2="157" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="1257" y="173" width="49" height="67" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="1257" y1="173" x2="1306" y2="173" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="1346" y="157" width="88" height="83" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/><line x1="1346" y1="157" x2="1434" y2="157" stroke="rgba(255,255,255,0.43000000000000005)" stroke-width="1.4"/><rect x="-10" y="122" width="38" height="118" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="-10" y1="122" x2="28" y2="122" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="-2" cy="132" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="13" cy="132" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="-2" cy="158" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="13" cy="158" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="-2" cy="184" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="13" cy="184" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="-2" cy="210" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="13" cy="210" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="39" y="62" width="47" height="178" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="39" y1="62" x2="86" y2="62" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="47" cy="72" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="62" cy="72" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="47" cy="98" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="62" cy="98" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="47" cy="124" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="62" cy="124" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="47" cy="150" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="62" cy="150" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="47" cy="176" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="62" cy="176" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="47" cy="202" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="62" cy="202" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="62" y1="62" x2="62" y2="44" stroke="rgba(255,255,255,0.6)" stroke-width="1"/><circle cx="62" cy="44" r="1.6" fill="rgba(255,255,255,0.8)"/><rect x="105" y="137" width="55" height="103" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="105" y1="137" x2="160" y2="137" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="113" cy="147" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="128" cy="147" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="143" cy="147" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="113" cy="173" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="128" cy="173" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="143" cy="173" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="113" cy="199" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="128" cy="199" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="143" cy="199" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="169" y="112" width="59" height="128" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="169" y1="112" x2="228" y2="112" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="177" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="192" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="207" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="177" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="192" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="207" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="177" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="192" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="207" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="177" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="192" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="207" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="253" y="52" width="39" height="188" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="253" y1="52" x2="292" y2="52" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="261" cy="62" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="276" cy="62" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="261" cy="88" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="276" cy="88" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="261" cy="114" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="276" cy="114" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="261" cy="140" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="276" cy="140" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="261" cy="166" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="276" cy="166" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="261" cy="192" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="276" cy="192" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="272" y1="52" x2="272" y2="34" stroke="rgba(255,255,255,0.6)" stroke-width="1"/><circle cx="272" cy="34" r="1.6" fill="rgba(255,255,255,0.8)"/><rect x="312" y="100" width="38" height="140" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="312" y1="100" x2="350" y2="100" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="320" cy="110" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="335" cy="110" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="320" cy="136" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="335" cy="136" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="320" cy="162" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="335" cy="162" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="320" cy="188" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="335" cy="188" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="320" cy="214" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="335" cy="214" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="367" y="90" width="62" height="150" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="367" y1="90" x2="429" y2="90" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="375" cy="100" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="390" cy="100" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="405" cy="100" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="375" cy="126" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="390" cy="126" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="405" cy="126" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="375" cy="152" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="390" cy="152" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="405" cy="152" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="375" cy="178" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="390" cy="178" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="405" cy="178" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="375" cy="204" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="390" cy="204" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="405" cy="204" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="456" y="60" width="64" height="180" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="456" y1="60" x2="520" y2="60" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="464" cy="70" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="479" cy="70" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="494" cy="70" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="509" cy="70" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="464" cy="96" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="479" cy="96" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="494" cy="96" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="509" cy="96" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="464" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="479" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="494" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="509" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="464" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="479" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="494" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="509" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="464" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="479" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="494" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="509" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="464" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="479" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="494" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="509" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="488" y1="60" x2="488" y2="42" stroke="rgba(255,255,255,0.6)" stroke-width="1"/><circle cx="488" cy="42" r="1.6" fill="rgba(255,255,255,0.8)"/><rect x="539" y="146" width="54" height="94" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="539" y1="146" x2="593" y2="146" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="547" cy="156" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="562" cy="156" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="577" cy="156" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="547" cy="182" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="562" cy="182" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="577" cy="182" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="547" cy="208" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="562" cy="208" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="577" cy="208" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="623" y="165" width="38" height="75" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="623" y1="165" x2="661" y2="165" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="631" cy="175" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="646" cy="175" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="631" cy="201" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="646" cy="201" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="690" y="72" width="43" height="168" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="690" y1="72" x2="733" y2="72" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="698" cy="82" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="713" cy="82" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="698" cy="108" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="713" cy="108" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="698" cy="134" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="713" cy="134" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="698" cy="160" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="713" cy="160" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="698" cy="186" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="713" cy="186" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="698" cy="212" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="713" cy="212" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="711" y1="72" x2="711" y2="54" stroke="rgba(255,255,255,0.6)" stroke-width="1"/><circle cx="711" cy="54" r="1.6" fill="rgba(255,255,255,0.8)"/><rect x="750" y="61" width="38" height="179" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="750" y1="61" x2="788" y2="61" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="758" cy="71" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="773" cy="71" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="758" cy="97" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="773" cy="97" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="758" cy="123" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="773" cy="123" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="758" cy="149" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="773" cy="149" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="758" cy="175" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="773" cy="175" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="758" cy="201" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="773" cy="201" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="769" y1="61" x2="769" y2="43" stroke="rgba(255,255,255,0.6)" stroke-width="1"/><circle cx="769" cy="43" r="1.6" fill="rgba(255,255,255,0.8)"/><rect x="803" y="158" width="63" height="82" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="803" y1="158" x2="866" y2="158" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="811" cy="168" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="826" cy="168" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="841" cy="168" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="811" cy="194" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="826" cy="194" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="841" cy="194" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="886" y="112" width="44" height="128" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="886" y1="112" x2="930" y2="112" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="894" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="909" cy="122" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="894" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="909" cy="148" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="894" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="909" cy="174" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="894" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="909" cy="200" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="958" y="124" width="62" height="116" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="958" y1="124" x2="1020" y2="124" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="966" cy="134" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="981" cy="134" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="996" cy="134" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="966" cy="160" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="981" cy="160" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="996" cy="160" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="966" cy="186" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="981" cy="186" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="996" cy="186" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="966" cy="212" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="981" cy="212" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="996" cy="212" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="1033" y="125" width="47" height="115" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="1033" y1="125" x2="1080" y2="125" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="1041" cy="135" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1056" cy="135" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1041" cy="161" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1056" cy="161" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1041" cy="187" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1056" cy="187" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1041" cy="213" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1056" cy="213" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="1094" y="136" width="57" height="104" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="1094" y1="136" x2="1151" y2="136" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="1102" cy="146" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1117" cy="146" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1132" cy="146" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1102" cy="172" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1117" cy="172" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1132" cy="172" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1102" cy="198" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1117" cy="198" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1132" cy="198" r="1.3" fill="rgba(255,255,255,0.45)"/><rect x="1181" y="88" width="57" height="152" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="1181" y1="88" x2="1238" y2="88" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="1189" cy="98" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1204" cy="98" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1219" cy="98" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1189" cy="124" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1204" cy="124" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1219" cy="124" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1189" cy="150" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1204" cy="150" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1219" cy="150" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1189" cy="176" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1204" cy="176" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1219" cy="176" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1189" cy="202" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1204" cy="202" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1219" cy="202" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="1209" y1="88" x2="1209" y2="70" stroke="rgba(255,255,255,0.6)" stroke-width="1"/><circle cx="1209" cy="70" r="1.6" fill="rgba(255,255,255,0.8)"/><rect x="1248" y="89" width="55" height="151" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="1248" y1="89" x2="1303" y2="89" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="1256" cy="99" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1271" cy="99" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1286" cy="99" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1256" cy="125" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1271" cy="125" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1286" cy="125" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1256" cy="151" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1271" cy="151" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1286" cy="151" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1256" cy="177" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1271" cy="177" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1286" cy="177" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1256" cy="203" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1271" cy="203" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1286" cy="203" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="1275" y1="89" x2="1275" y2="71" stroke="rgba(255,255,255,0.6)" stroke-width="1"/><circle cx="1275" cy="71" r="1.6" fill="rgba(255,255,255,0.8)"/><rect x="1316" y="77" width="53" height="163" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="1316" y1="77" x2="1369" y2="77" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="1324" cy="87" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1339" cy="87" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1354" cy="87" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1324" cy="113" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1339" cy="113" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1354" cy="113" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1324" cy="139" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1339" cy="139" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1354" cy="139" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1324" cy="165" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1339" cy="165" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1354" cy="165" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1324" cy="191" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1339" cy="191" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1354" cy="191" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="1342" y1="77" x2="1342" y2="59" stroke="rgba(255,255,255,0.6)" stroke-width="1"/><circle cx="1342" cy="59" r="1.6" fill="rgba(255,255,255,0.8)"/><rect x="1384" y="111" width="41" height="129" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/><line x1="1384" y1="111" x2="1425" y2="111" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/><circle cx="1392" cy="121" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1407" cy="121" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1392" cy="147" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1407" cy="147" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1392" cy="173" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1407" cy="173" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1392" cy="199" r="1.3" fill="rgba(255,255,255,0.45)"/><circle cx="1407" cy="199" r="1.3" fill="rgba(255,255,255,0.45)"/><line x1="0" y1="240" x2="1420" y2="240" stroke="rgba(255,255,255,0.5)" stroke-width="1"/></svg>
+
+<!-- 前景渐变粒子（地球前面） -->
+<!-- 背景不规则渐变粒子（全背景后面） -->
+<div class="particles">
+ <span class="p" style="left:22.8%; top:20.8%; width:5.8px; height:5.8px; animation-delay:0.9s; animation-duration:5.8s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:40.4%; top:51.9%; width:11.0px; height:11.0px; animation-delay:6.1s; animation-duration:7.5s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(125,211,252,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:23.8%; top:59.6%; width:6.2px; height:6.2px; animation-delay:5.3s; animation-duration:8.9s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:12.5%; top:45.4%; width:5.8px; height:5.8px; animation-delay:2.2s; animation-duration:9.3s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:29.6%; top:74.8%; width:8.7px; height:8.7px; animation-delay:0.3s; animation-duration:7.7s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(103,232,249,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:24.0%; top:36.1%; width:13.3px; height:13.3px; animation-delay:3.0s; animation-duration:9.1s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(125,211,252,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:33.7%; top:93.8%; width:7.6px; height:7.6px; animation-delay:6.2s; animation-duration:8.4s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:41.4%; top:43.5%; width:13.2px; height:13.2px; animation-delay:6.1s; animation-duration:8.1s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:3.0%; top:4.2%; width:8.7px; height:8.7px; animation-delay:0.5s; animation-duration:7.2s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(103,232,249,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:5.6%; top:31.1%; width:4.1px; height:4.1px; animation-delay:0.9s; animation-duration:7.1s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:49.6%; top:93.5%; width:10.4px; height:10.4px; animation-delay:1.7s; animation-duration:7.1s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(103,232,249,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:42.2%; top:35.3%; width:10.9px; height:10.9px; animation-delay:0.9s; animation-duration:9.0s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(125,211,252,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:33.4%; top:72.2%; width:10.1px; height:10.1px; animation-delay:0.8s; animation-duration:6.0s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(103,232,249,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:17.0%; top:95.2%; width:8.1px; height:8.1px; animation-delay:5.7s; animation-duration:6.8s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:28.0%; top:24.0%; width:6.6px; height:6.6px; animation-delay:1.2s; animation-duration:5.8s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:16.5%; top:57.1%; width:4.5px; height:4.5px; animation-delay:2.5s; animation-duration:6.8s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:44.9%; top:38.3%; width:12.1px; height:12.1px; animation-delay:0.6s; animation-duration:9.0s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:50.8%; top:69.8%; width:8.0px; height:8.0px; animation-delay:1.5s; animation-duration:8.9s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(103,232,249,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:13.2%; top:69.7%; width:5.1px; height:5.1px; animation-delay:1.4s; animation-duration:8.7s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:37.4%; top:25.5%; width:7.0px; height:7.0px; animation-delay:5.7s; animation-duration:7.2s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(125,211,252,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:50.0%; top:8.5%; width:6.9px; height:6.9px; animation-delay:5.1s; animation-duration:7.6s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:51.2%; top:26.1%; width:12.8px; height:12.8px; animation-delay:6.3s; animation-duration:8.8s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(103,232,249,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:9.6%; top:37.6%; width:10.8px; height:10.8px; animation-delay:4.3s; animation-duration:7.3s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:21.5%; top:85.4%; width:7.5px; height:7.5px; animation-delay:4.5s; animation-duration:9.4s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:11.4%; top:64.5%; width:5.7px; height:5.7px; animation-delay:4.3s; animation-duration:8.5s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:47.8%; top:23.7%; width:12.6px; height:12.6px; animation-delay:4.3s; animation-duration:5.5s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:28.1%; top:21.0%; width:9.2px; height:9.2px; animation-delay:3.3s; animation-duration:8.7s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:51.4%; top:26.8%; width:12.5px; height:12.5px; animation-delay:3.0s; animation-duration:7.6s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(103,232,249,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:34.5%; top:61.4%; width:11.7px; height:11.7px; animation-delay:1.3s; animation-duration:5.6s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:6.7%; top:30.9%; width:9.8px; height:9.8px; animation-delay:2.7s; animation-duration:7.0s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(125,211,252,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:31.1%; top:91.1%; width:9.9px; height:9.9px; animation-delay:1.3s; animation-duration:5.9s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:47.6%; top:39.1%; width:11.9px; height:11.9px; animation-delay:3.0s; animation-duration:6.0s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:8.1%; top:44.0%; width:12.5px; height:12.5px; animation-delay:2.7s; animation-duration:9.3s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(103,232,249,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:10.7%; top:25.5%; width:6.7px; height:6.7px; animation-delay:5.5s; animation-duration:8.3s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:10.9%; top:87.8%; width:14.0px; height:14.0px; animation-delay:5.8s; animation-duration:9.1s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:26.7%; top:17.9%; width:4.7px; height:4.7px; animation-delay:6.5s; animation-duration:7.6s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:7.2%; top:76.8%; width:4.7px; height:4.7px; animation-delay:3.7s; animation-duration:7.6s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(125,211,252,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:35.2%; top:56.8%; width:8.1px; height:8.1px; animation-delay:0.9s; animation-duration:9.2s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:22.5%; top:6.5%; width:9.1px; height:9.1px; animation-delay:4.9s; animation-duration:6.1s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 72%);"></span>
+ <span class="p" style="left:24.7%; top:67.4%; width:8.2px; height:8.2px; animation-delay:0.8s; animation-duration:6.2s; background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(251,191,36,0.5) 45%, rgba(255,255,255,0) 72%);"></span>
+ </div>
+
+<!-- 背景线条装饰：飞机 / 轮船 -->
+<div class="deco" style="left:4%; top:12%; width:120px; filter:drop-shadow(0 0 6px rgba(125,211,252,0.5));">
+ <svg viewBox="0 0 140 70">
+  <path class="stroke" stroke-width="1.8" d="M10,35 Q30,30 60,32 Q95,34 130,30"/>
+  <path class="stroke" stroke-width="1.6" d="M130,30 L138,35 L130,40"/>
+  <path class="stroke" stroke-width="1.6" d="M50,33 L70,10 L78,10 L62,36"/>
+  <path class="stroke" stroke-width="1.6" d="M50,33 L70,56 L78,56 L62,36"/>
+  <path class="stroke" stroke-width="1.5" d="M10,35 L2,26 L8,26 L16,35"/>
+  <path class="stroke" stroke-width="1.5" d="M10,35 L2,44 L8,44 L16,35"/>
+  <path class="stroke-thin" stroke-width="1" stroke-dasharray="4 5" d="M30,35 Q8,31 -22,28"/>
+ </svg>
+</div>
+<div class="deco deco-float" style="left:42%; top:20%; width:86px; filter:drop-shadow(0 0 5px rgba(125,211,252,0.45));">
+ <svg viewBox="0 0 120 60">
+  <path class="stroke" stroke-width="1.6" d="M8,30 Q26,26 52,28 Q80,30 112,26"/>
+  <path class="stroke" stroke-width="1.4" d="M112,26 L119,30 L112,34"/>
+  <path class="stroke" stroke-width="1.4" d="M44,29 L60,10 L67,10 L53,32"/>
+  <path class="stroke" stroke-width="1.4" d="M44,29 L60,48 L67,48 L53,32"/>
+  <path class="stroke-thin" stroke-width="0.9" stroke-dasharray="3 4" d="M26,30 Q8,27 -18,24"/>
+ </svg>
+</div>
+<div class="deco" style="left:6%; bottom:26%; width:150px; filter:drop-shadow(0 0 6px rgba(125,211,252,0.5));">
+ <svg viewBox="0 0 160 100">
+  <path class="stroke" stroke-width="1.8" d="M10,60 L150,60 L135,85 L25,85 Z"/>
+  <line class="stroke-thin" stroke-width="1.2" x1="20" y1="60" x2="140" y2="60"/>
+  <rect class="stroke" stroke-width="1.5" x="70" y="38" width="14" height="22"/>
+  <rect class="stroke-thin" stroke-width="1.2" x="30" y="45" width="13" height="15"/>
+  <rect class="stroke-thin" stroke-width="1.2" x="46" y="45" width="13" height="15"/>
+  <line class="stroke-thin" stroke-width="1.2" x1="120" y1="36" x2="120" y2="60"/>
+  <path class="stroke-thin" stroke-width="1.2" d="M120,36 L132,41 L120,46 Z"/>
+  <path class="stroke-faint" stroke-width="1.2" d="M5,92 Q25,88 45,93 Q70,98 95,92 Q120,86 155,93"/>
+  <path class="stroke-faint" stroke-width="1" d="M5,98 Q30,94 60,99 Q90,104 120,98 Q140,94 155,99"/>
+ </svg>
+</div>
+<!-- 左侧：圆形地球概念图 -->
+<div class="earth-canvas">
+ <div class="earth-concept">
+  <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+   <defs>
+    <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
+     <stop offset="0%" stop-color="rgba(255,255,255,0.95)"/>
+     <stop offset="50%" stop-color="rgba(190,227,255,0.75)"/>
+     <stop offset="100%" stop-color="rgba(255,255,255,0.95)"/>
+    </linearGradient>
+    <radialGradient id="earth-fill" cx="0.38" cy="0.32" r="0.9">
+     <stop offset="0%" stop-color="rgba(255,255,255,0.16)"/>
+     <stop offset="60%" stop-color="rgba(190,227,255,0.08)"/>
+     <stop offset="100%" stop-color="rgba(125,211,252,0.04)"/>
+    </radialGradient>
+    <filter id="line-glow" x="-40%" y="-40%" width="180%" height="180%">
+     <feGaussianBlur stdDeviation="2.2" result="b"/>
+     <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft-glow" x="-40%" y="-40%" width="180%" height="180%">
+     <feGaussianBlur stdDeviation="1.2" result="b"/>
+     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+   </defs>
+
+   <!-- 底部投影（浮空感） -->
+   <ellipse cx="150" cy="252" rx="92" ry="11" fill="rgba(10,40,90,0.14)"/>
+
+   <!-- 外层发光圈 -->
+   <circle cx="150" cy="150" r="124" fill="none" stroke="rgba(125,211,252,0.30)" stroke-width="9"/>
+   <circle cx="150" cy="150" r="127" fill="none" stroke="rgba(125,211,252,0.16)" stroke-width="3"/>
+
+   <!-- 主圆（渐变描边 + 浅填充） -->
+   <circle cx="150" cy="150" r="118" fill="url(#earth-fill)" stroke="url(#ring-grad)" stroke-width="2.2" filter="url(#line-glow)"/>
+   <!-- 内层细线圆 -->
+   <circle cx="150" cy="150" r="110" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.8"/>
+
+   <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 纬线 -->
+    <g stroke="rgba(255,255,255,0.40)" stroke-width="1">
+     <ellipse cx="150" cy="150" rx="118" ry="24"/>
+     <ellipse cx="150" cy="112" rx="114" ry="18"/>
+     <ellipse cx="150" cy="188" rx="114" ry="18"/>
+     <ellipse cx="150" cy="80" rx="100" ry="12"/>
+     <ellipse cx="150" cy="220" rx="100" ry="12"/>
+    </g>
+    <!-- 经线 -->
+    <g stroke="rgba(255,255,255,0.40)" stroke-width="1">
+     <ellipse cx="150" cy="150" rx="30" ry="118"/>
+     <ellipse cx="150" cy="150" rx="62" ry="118"/>
+     <ellipse cx="150" cy="150" rx="92" ry="118"/>
+     <line x1="150" y1="32" x2="150" y2="268"/>
+    </g>
+    <!-- 大陆轮廓（分散布局 + 发光） -->
+    <g stroke="rgba(255,255,255,0.92)" stroke-width="1.5" filter="url(#soft-glow)">
+     <!-- 北美洲（左上） -->
+     <path d="M95,100 Q103,86 117,82 Q131,80 139,88 Q145,96 143,106 Q141,114 147,120 Q145,130 131,132 Q115,132 105,126 Q95,118 93,108 Q93,104 95,100 Z"/>
+     <path d="M91,108 Q87,114 89,120 Q91,124 87,128 Q91,132 95,130"/>
+     <!-- 南美洲（左下） -->
+     <path d="M98,156 Q112,148 126,152 Q134,160 132,172 Q130,184 120,194 Q110,201 102,196 Q95,189 96,177 Q97,166 98,156 Z"/>
+     <!-- 欧洲（中上） -->
+     <path d="M152,72 Q165,65 179,71 Q188,78 186,88 Q185,97 175,102 Q163,105 157,97 Q151,89 153,80 Q152,76 152,72 Z"/>
+     <path d="M179,71 Q186,68 190,74"/>
+     <!-- 非洲（中下偏右） -->
+     <path d="M148,108 Q164,104 176,112 Q185,122 183,136 Q181,150 171,159 Q161,166 153,158 Q146,149 146,137 Q144,125 148,108 Z"/>
+     <!-- 亚洲（右上大块） -->
+     <path d="M120,160 Q141,150 165,156 Q185,162 195,176 Q200,190 192,205 Q178,219 155,217 Q135,213 123,203 Q114,192 117,180 Q116,170 120,160 Z"/>
+     <path d="M114,184 Q120,190 118,198 Q122,202 128,198"/>
+     <!-- 澳洲（右下） -->
+     <path d="M196,195 Q210,189 223,199 Q227,211 219,222 Q207,229 197,223 Q190,215 194,206 Q194,200 196,195 Z"/>
+     <!-- 大洋洲小岛弧（亚洲南侧） -->
+     <circle cx="184" cy="192" r="2.2"/>
+     <circle cx="192" cy="198" r="1.6"/>
+     <circle cx="178" cy="202" r="1.4"/>
+     <circle cx="200" cy="196" r="1.2"/>
+     <circle cx="190" cy="208" r="1.2"/>
+    </g>
+    <!-- 大陆内部细节线（跟随大陆新位置） -->
+    <g stroke="rgba(255,255,255,0.5)" stroke-width="0.9" filter="url(#soft-glow)">
+     <path d="M104,102 Q118,106 128,114 Q134,120 136,128"/>
+     <path d="M114,90 Q120,98 124,108"/>
+     <path d="M106,164 Q112,174 111,186"/>
+     <path d="M118,166 Q124,176 122,188"/>
+     <path d="M158,78 Q166,82 172,90"/>
+     <path d="M154,116 Q160,128 157,142"/>
+     <path d="M166,120 Q170,130 168,142"/>
+     <path d="M130,168 Q150,164 176,174 Q188,180 190,190"/>
+     <path d="M138,196 Q156,190 168,198 Q178,204 180,210"/>
+     <path d="M148,160 Q160,156 168,160"/>
+     <path d="M201,204 Q210,209 214,216"/>
+    </g>
+    <!-- 光点（城市/星座感 + 发光） -->
+    <g fill="rgba(255,255,255,0.95)" filter="url(#soft-glow)">
+     <circle cx="132" cy="96" r="1.6"/>
+     <circle cx="168" cy="112" r="1.4"/>
+     <circle cx="128" cy="172" r="1.6"/>
+     <circle cx="178" cy="188" r="1.4"/>
+     <circle cx="150" cy="212" r="1.5"/>
+     <circle cx="112" cy="140" r="1.2"/>
+    </g>
+   </g>
+
+   <!-- 顶部高光弧 -->
+   <path d="M70,96 A118,118 0 0 1 190,62" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="2.4" stroke-linecap="round" filter="url(#soft-glow)"/>
+   <path d="M88,110 A112,112 0 0 1 178,80" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.2" stroke-linecap="round"/>
+  </svg>
+ </div>
+</div>
+
+  </div>
+<!-- 右侧：登录卡片（不随背景缩放） -->
+<div class="side">
+ <div class="card">
+  <div class="brand">
+   <img src="/static/logo.png" alt="logo">
+   <div class="name">速捷供应链</div>
+  </div>
+  {% if error %}
+  <div class="error-msg">{{ error }}</div>
+  {% endif %}
+  <form method="post">
+  <div class="fg">
+   <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+   <input type="text" name="username" placeholder="用户名" required autofocus>
+  </div>
+  <div class="fg">
+   <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+   <input type="password" name="password" placeholder="密码" required>
+  </div>
+  <button type="submit" class="btn">登 录</button>
+  </form>
+ </div>
+</div>
+ </div>
+
+<script>
+// 背景锁定（v3）：背景画布 position:fixed 固定在视口中央，登录框 fixed 固定在视口右侧（永远可见）。
+// 用 devicePixelRatio 检测浏览器缩放（Ctrl+/-），反向 scale + 高度补偿，使背景保持物理尺寸不动；
+// 轮询 300ms 兜底（部分环境浏览器缩放不触发 resize）。
+(function () {
+  var canvas = document.querySelector('.bg-canvas');
+  if (!canvas) return;
+  var baseDPR = window.devicePixelRatio || 1;
+  function fit() {
+    var dpr = window.devicePixelRatio || 1;
+    var zoom = dpr / baseDPR;                       // 浏览器缩放倍数
+    if (Math.abs(zoom - 1) > 0.02) {
+      // 浏览器缩放 → 反向补偿（中心缩放，宽 1600px 与高度同时反向补偿，物理尺寸不变）
+      canvas.style.transform = 'translate(-50%,-50%) scale(' + (1 / zoom).toFixed(4) + ')';
+      canvas.style.height = (100 * zoom).toFixed(2) + 'vh';
+    } else {
+      // 正常/窗口拉伸 → 固定 1600px 居中，高度跟随视口
+      canvas.style.transform = 'translate(-50%,-50%) scale(1)';
+      canvas.style.height = '100vh';
+    }
+  }
+  window.addEventListener('resize', fit);
+  window.setInterval(fit, 300);                     // 轮询兜底
+  fit();
+})();
+</script>
+</body>
+</html>

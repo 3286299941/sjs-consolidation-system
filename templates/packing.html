@@ -1,0 +1,494 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+ <div class="card-title">
+ 打包操作
+ <span style="font-size: 13px; font-weight: normal; color: var(--text-muted); margin-left: 10px;">
+ 选择客户开始打包
+ </span>
+ <div style="float: right; display: flex; gap: 10px; align-items: center;">
+ <select id="zip-filter" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text); cursor: pointer;"
+ onchange="filterByZip(this.value)">
+ <option value=""> 全部邮编</option>
+ {% for zip in all_zips %}
+ <option value="{{ zip }}" {% if zip == filter_zip %}selected{% endif %}>{{ zip }}</option>
+ {% endfor %}
+ </select>
+ <input type="text" id="search-box" placeholder="搜索客户姓名..." 
+ style="padding: 8px 15px; border: 1px solid var(--border); border-radius: 8px; width: 200px;"
+ oninput="filterCustomers()">
+ {% if filter_zip %}
+ <a href="/packing" class="btn btn-secondary" style="text-decoration: none; padding: 7px 12px; font-size: 12px;"> 清除筛选</a>
+ {% endif %}
+ </div>
+ </div>
+
+ <!-- 扫码跳转栏 -->
+ <div id="scan-bar" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin-bottom: 16px; background: linear-gradient(135deg, rgba(21,101,192,0.06), rgba(13,71,161,0.06)); border: 1px dashed #1565c0; border-radius: 10px;">
+ <span style="font-size: 20px;"></span>
+ <div style="flex: 1;">
+ <input type="text" id="barcode-scan-input" 
+ placeholder="扫描客户条码，自动进入打包界面…"
+ style="width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.3s;"
+ onkeydown="handleBarcodeScan(event)" 
+ oninput="handleBarcodeAutoScan(event)">
+ <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; padding-left: 2px;">
+ 扫码枪扫描后自动跳转 · 也可手动输入条码后按 Enter
+ </div>
+ </div>
+ <button class="camera-btn" onclick="openCameraScanner('barcode-scan-input', function(code) { lookupAndRedirect(); })" title="摄像头扫描条码">
+ 摄像头扫描
+ </button>
+ <div id="scan-status" style="font-size: 12px; color: var(--text-muted); white-space: nowrap;">等待扫描…</div>
+ </div>
+
+ <!-- 顶部汇总栏 -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+ <div style="background: linear-gradient(135deg, #1565c0, #0d47a1); color: #fff; padding: 15px; border-radius: 10px; text-align: center;">
+ <div style="font-size: 28px; font-weight: bold;">{{ customers|length }}</div>
+ <div style="font-size: 13px; opacity: 0.9;">待打包客户</div>
+ </div>
+ <div style="background: linear-gradient(135deg, #1565c0, #0d47a1); color: #fff; padding: 15px; border-radius: 10px; text-align: center;">
+ <div style="font-size: 28px; font-weight: bold;">{{ total_pending_packages }}</div>
+ <div style="font-size: 13px; opacity: 0.9;">待打包件数</div>
+ </div>
+ <div style="background: linear-gradient(135deg, #1565c0, #0d47a1); color: #fff; padding: 15px; border-radius: 10px; text-align: center;">
+ <div style="font-size: 28px; font-weight: bold;">{{ scan_hung_complete }}</div>
+ <div style="font-size: 13px; opacity: 0.9;">已扫描</div>
+ </div>
+ <div style="background: linear-gradient(135deg, #1565c0, #0d47a1); color: #fff; padding: 15px; border-radius: 10px; text-align: center;">
+ <div style="font-size: 28px; font-weight: bold;">{{ scan_hung_incomplete }}</div>
+ <div style="font-size: 13px; opacity: 0.9;">缺件</div>
+ </div>
+</div>
+
+ {% if customers %}
+ <div style="overflow-x: auto;">
+ <table id="customer-table">
+ <thead>
+ <tr>
+ <th>序号</th>
+ <th>客户姓名</th>
+ <th>批次</th>
+ <th>所在区位</th>
+ <th>收货地址</th>
+ <th>待打包件数</th>
+ <th>备注</th>
+ <th>操作</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for item in customers %}
+ <tr class="customer-row{% if item.hung_status == 'complete' %} hung-complete{% elif item.hung_status == 'incomplete' %} hung-incomplete{% endif %}" data-name="{{ item.name.lower() }}" data-zip="{{ item.zip_code }}" data-id="{{ item.id }}" data-barcode="{{ item.barcode }}" data-remark="{{ item.customer_remark }}">
+ <td>{{ loop.index }}</td>
+ <td>
+ <strong style="color: #1565c0;">{{ item.name }}</strong>
+ </td>
+ <td>
+ {% if item.batch_no == '单独发货' %}
+ <span style="display:inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #92400e; background: rgba(245,158,11,0.15); font-weight: 600;">单独发货</span>
+ {% elif item.batch_no %}
+ <code style="background: rgba(21,101,192,0.1); padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #1565c0;">{{ item.batch_no }}</code>
+ {% else %}
+ <span style="color: var(--text-muted); font-size: 12px;">—</span>
+ {% endif %}
+ </td>
+ <td><span style="font-size: 12px; color: var(--text-primary);">{{ item.shelf_slots }}</span></td>
+ <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ item.address }}">
+ {{ item.address }}
+ </td>
+ <td>
+ <span class="badge badge-danger">{{ item.pending_count }} 件</span>
+ </td>
+ <td style="max-width: 180px;">
+ <div style="display: flex; flex-direction: column; gap: 4px;" class="remark-cell" data-customer-id="{{ item.id }}">
+ <!-- 客户备注（可编辑） -->
+ <div class="customer-remark-display" style="display: flex; align-items: center; gap: 4px; cursor: pointer;" 
+ onclick="editCustomerRemark(this, {{ item.id }})" 
+ title="点击编辑客户备注">
+ {% if item.customer_remark %}
+ <span class="remark-text" style="font-size: 12px; color: #1565c0; background: rgba(21,101,192,0.1); padding: 2px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;"> {{ item.customer_remark }}</span>
+ {% else %}
+ <span class="remark-text" style="font-size: 12px; color: var(--text-muted); font-style: italic;">点击添加备注…</span>
+ {% endif %}
+ <span style="font-size: 10px; color: var(--text-muted); opacity: 0.5;"></span>
+ </div>
+ <!-- 编辑区（默认隐藏） -->
+ <div class="customer-remark-edit" style="display: none; flex-direction: column; gap: 4px;">
+ <textarea class="remark-textarea" rows="2" style="width: 100%; padding: 4px 6px; border: 1px solid #1565c0; border-radius: 4px; font-size: 12px; resize: vertical; background: var(--bg-card); color: var(--text);" 
+ placeholder="输入客户备注…">{{ item.customer_remark }}</textarea>
+ <div style="display: flex; gap: 4px;">
+ <button class="btn" style="padding: 2px 8px; font-size: 11px; background: #1565c0; color: #fff; border-radius: 3px;" 
+ onclick="saveCustomerRemark({{ item.id }}, this)">保存</button>
+ <button class="btn" style="padding: 2px 8px; font-size: 11px; background: var(--bg-input); color: var(--text); border-radius: 3px;" 
+ onclick="cancelEditRemark(this)">取消</button>
+ </div>
+ </div>
+<!-- 包裹备注（只读） -->
+{% for r in item.customer_remarks %}
+ <span style="font-size: 12px; color: #d97706; background: rgba(245,158,11,0.1); padding: 1px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ r }}"> {{ r }}</span>
+ {% endfor %}
+ {% for r in item.abnormal_remarks %}
+ <span style="font-size: 12px; color: #ef4444; background: rgba(239,68,68,0.1); padding: 1px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ r }}"> {{ r }}</span>
+ {% endfor %}
+ {% if not item.customer_remark and not item.customer_remarks and not item.abnormal_remarks %}
+ <span style="color: var(--text-muted); font-size: 12px;">—</span>
+ {% endif %}
+ </div>
+ </td>
+ <td style="white-space: nowrap;">
+ {% if item.hung_status == 'complete' %}
+ <a href="/pack/{{ item.id }}" class="btn" style="padding: 8px 20px; background: #1565c0; color: #fff; text-decoration: none; border-radius: 6px;">
+ 继续打包
+ </a>
+ <span class="badge" style="padding: 4px 8px; background: rgba(21,101,192,0.1); color: #1565c0; font-size: 11px; margin-left: 4px;">已扫描</span>
+ {% elif item.hung_status == 'incomplete' %}
+ <a href="/pack/{{ item.id }}" class="btn" style="padding: 8px 20px; background: #dc2626; color: #fff; text-decoration: none; border-radius: 6px;">
+ 继续扫描
+ </a>
+ <span class="badge" style="padding: 4px 8px; background: rgba(239,68,68,0.1); color: #dc2626; font-size: 11px; margin-left: 4px;">缺件</span>
+ {% elif item.pending_count > 0 %}
+ <a href="/pack/{{ item.id }}" class="btn" style="padding: 8px 20px; background: #1565c0; color: #fff; text-decoration: none; border-radius: 6px;">
+ 开始打包
+ </a>
+ {% else %}
+ <span class="badge" style="padding: 8px 12px; background: rgba(21,101,192,0.1); color: #1565c0;"> 已完成</span>
+ {% endif %}
+ <button class="btn btn-secondary" onclick="showQuickAdd(this, {{ item.id }}, '{{ item.name|e }}')" title="快速录入漏扫单号" style="padding: 8px 10px; font-size: 13px; margin-left: 4px;">添加</button>
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+ {% else %}
+ <!-- 空状态 -->
+ <div class="empty-state" style="padding: 60px 20px;">
+ <div style="font-size: 72px; margin-bottom: 20px;"></div>
+ <h3 style="color: var(--text-secondary); margin-bottom: 10px;">暂无待打包包裹</h3>
+ <p style="font-size: 16px; color: var(--text-secondary); margin-bottom: 5px;">需要先在待打包确认页面确认本周发货</p>
+ <p style="font-size: 13px; color: var(--text-muted);">确认后包裹状态变更为"待打包"，即可在此进行打包操作</p>
+ <div style="margin-top: 30px; display: flex; gap: 15px; justify-content: center;">
+ <a href="/inbound" class="btn" style="background: var(--accent); color: #fff; text-decoration: none;">
+ 去入库扫描
+ </a>
+ <a href="/shipments" class="btn btn-secondary" style="text-decoration: none;">
+ 去待打包确认
+ </a>
+ </div>
+ </div>
+ {% endif %}
+</div>
+
+<script>
+ // ========== 条码扫描跳转 ==========
+ let barcodeScanTimer = null;
+ const BARCODE_SCAN_DELAY = 200; // 200ms 防抖，适配扫码枪
+
+ function handleBarcodeScan(e) {
+ if (e.key === 'Enter') {
+ e.preventDefault();
+ lookupAndRedirect();
+ }
+ }
+
+ function handleBarcodeAutoScan(e) {
+ const input = e.target;
+ if (!input.value.trim()) return;
+ // 扫码枪自动检测：输入停止后自动触发
+ if (barcodeScanTimer) clearTimeout(barcodeScanTimer);
+ barcodeScanTimer = setTimeout(() => {
+ const currentVal = input.value.trim();
+ if (currentVal) lookupAndRedirect();
+ }, BARCODE_SCAN_DELAY);
+ }
+
+ async function lookupAndRedirect() {
+ const input = document.getElementById('barcode-scan-input');
+ // 清洗扫描输入：去首尾空格、转大写、去除控制字符
+ const rawBarcode = input.value.replace(/[\x00-\x1f\x7f]/g, '').trim().toUpperCase();
+ if (!rawBarcode) return;
+
+ input.value = rawBarcode; // 回显清洗后的值
+ const barcode = rawBarcode;
+
+ const statusEl = document.getElementById('scan-status');
+ statusEl.textContent = '查找中…';
+ statusEl.style.color = 'var(--accent)';
+ input.style.borderColor = 'var(--accent)';
+
+ try {
+ // 先尝试客户端精确匹配
+ const rows = document.querySelectorAll('.customer-row');
+ for (const row of rows) {
+ if (row.getAttribute('data-barcode') === barcode) {
+ const cid = row.getAttribute('data-id');
+ const cname = row.querySelector('strong').textContent;
+ statusEl.textContent = ' ' + cname;
+ statusEl.style.color = 'var(--success)';
+ input.style.borderColor = 'var(--success)';
+ showToast('找到客户：' + cname + '，正在跳转…', 'success');
+ setTimeout(() => { window.location.href = '/pack/' + cid; }, 300);
+ return;
+ }
+ }
+
+ // 客户端前缀匹配（兼容旧版6位条码标签）
+ for (const row of rows) {
+ const rowBarcode = row.getAttribute('data-barcode');
+ if (rowBarcode && rowBarcode.startsWith(barcode)) {
+ const cid = row.getAttribute('data-id');
+ const cname = row.querySelector('strong').textContent;
+ statusEl.textContent = ' ' + cname + '（前缀匹配）';
+ statusEl.style.color = 'var(--success)';
+ input.style.borderColor = 'var(--success)';
+ showToast('条码前缀匹配客户：' + cname + '，正在跳转…', 'success');
+ setTimeout(() => { window.location.href = '/pack/' + cid; }, 300);
+ return;
+ }
+ }
+
+ // 客户端未找到，调API查找
+ const result = await apiRequest('/api/customer/by_barcode?barcode=' + encodeURIComponent(barcode));
+
+ if (result.success && result.data) {
+ const c = result.data;
+ const matchInfo = c.matched_by === 'prefix' ? '（前缀匹配）' : '';
+ statusEl.textContent = ' ' + c.name + matchInfo;
+ statusEl.style.color = 'var(--success)';
+ input.style.borderColor = 'var(--success)';
+ showToast('找到客户：' + c.name + matchInfo + '，正在跳转…', 'success');
+ setTimeout(() => { window.location.href = '/pack/' + c.id; }, 300);
+ } else {
+ throw new Error(result.message || '未找到该条码对应的客户');
+ }
+ } catch (e) {
+ statusEl.textContent = ' 未找到';
+ statusEl.style.color = 'var(--danger)';
+ input.style.borderColor = 'var(--danger)';
+ input.style.animation = 'shake 0.4s ease';
+ setTimeout(() => { input.style.animation = ''; }, 400);
+ showToast('条码 ' + barcode + ' 未匹配任何客户，请检查条码是否正确', 'error');
+ setTimeout(() => {
+ input.value = '';
+ input.focus();
+ statusEl.textContent = '等待扫描…';
+ statusEl.style.color = 'var(--text-muted)';
+ input.style.borderColor = 'var(--border)';
+ }, 2000);
+ }
+ }
+
+ // ========== 邮编筛选 ==========
+ function filterByZip(zip) {
+ if (zip) {
+ window.location.href = '/packing?zip=' + encodeURIComponent(zip);
+ } else {
+ window.location.href = '/packing';
+ }
+ }
+
+ // 前端搜索过滤
+ function filterCustomers() {
+ const searchText = document.getElementById('search-box').value.toLowerCase();
+ const rows = document.querySelectorAll('.customer-row');
+
+ rows.forEach(row => {
+ const name = row.getAttribute('data-name');
+ if (name.includes(searchText)) {
+ row.style.display = '';
+ } else {
+ row.style.display = 'none';
+ }
+ });
+
+ // 更新序号显示
+ let visibleIndex = 1;
+ rows.forEach(row => {
+ if (row.style.display !== 'none') {
+ row.querySelector('td:first-child').textContent = visibleIndex;
+ visibleIndex++;
+ }
+ });
+ }
+
+ // 分页
+ document.addEventListener('DOMContentLoaded', function() {
+ Paginator.apply('#customer-table', 20);
+ // 自动聚焦扫码输入框
+ document.getElementById('barcode-scan-input').focus();
+ });
+
+ // 页面任意位置点击扫码输入框区域时自动聚焦
+ document.addEventListener('click', function(e) {
+ if (e.target.closest('#scan-bar')) {
+ document.getElementById('barcode-scan-input').focus();
+ }
+ });
+
+ // ========== 客户备注编辑 ==========
+ function editCustomerRemark(displayEl, customerId) {
+ const td = displayEl.closest('td');
+ // 隐藏显示区，显示编辑区
+ displayEl.style.display = 'none';
+ const editEl = td.querySelector('.customer-remark-edit');
+ editEl.style.display = 'flex';
+ editEl.querySelector('textarea').focus();
+ }
+
+ async function saveCustomerRemark(customerId, btn) {
+ const td = btn.closest('td');
+ const textarea = td.querySelector('.remark-textarea');
+ const remark = textarea.value.trim();
+
+ try {
+ btn.disabled = true;
+ btn.textContent = '保存中…';
+ const result = await apiRequest('/api/customer/' + customerId + '/remark', {
+ method: 'POST',
+ body: JSON.stringify({ remark: remark }),
+ headers: { 'Content-Type': 'application/json' }
+ });
+
+ if (result.success) {
+ // 更新显示
+ const displayEl = td.querySelector('.customer-remark-display');
+ const remarkText = displayEl.querySelector('.remark-text');
+ if (remark) {
+ remarkText.textContent = ' ' + remark;
+ remarkText.style.color = '#1565c0';
+ remarkText.style.fontStyle = 'normal';
+ remarkText.style.background = 'rgba(21,101,192,0.1)';
+ } else {
+ remarkText.textContent = '点击添加备注…';
+ remarkText.style.color = 'var(--text-muted)';
+ remarkText.style.fontStyle = 'italic';
+ remarkText.style.background = 'none';
+ }
+ // 更新 data-remark
+ const row = td.closest('.customer-row');
+ row.setAttribute('data-remark', remark);
+
+ // 切换回显示模式
+ td.querySelector('.customer-remark-edit').style.display = 'none';
+ displayEl.style.display = 'flex';
+ showToast('客户备注已更新', 'success');
+ } else {
+ showToast(result.message || '保存失败', 'error');
+ }
+ } catch (e) {
+ showToast('网络错误：' + e.message, 'error');
+ } finally {
+ btn.disabled = false;
+ btn.textContent = '保存';
+ }
+ }
+
+ function cancelEditRemark(btn) {
+ const td = btn.closest('td');
+ const displayEl = td.querySelector('.customer-remark-display');
+ const editEl = td.querySelector('.customer-remark-edit');
+ // 恢复原始值
+ const row = td.closest('.customer-row');
+ const originalRemark = row.getAttribute('data-remark');
+ editEl.querySelector('textarea').value = originalRemark || '';
+ // 切换回显示模式
+ editEl.style.display = 'none';
+ displayEl.style.display = 'flex';
+ }
+
+ // 点击编辑区以外区域取消编辑
+ document.addEventListener('click', function(e) {
+ if (!e.target.closest('.customer-remark-edit') && !e.target.closest('.customer-remark-display')) {
+ document.querySelectorAll('.customer-remark-edit[style*="display: flex"]').forEach(editEl => {
+ const td = editEl.closest('td');
+ const displayEl = td.querySelector('.customer-remark-display');
+ const row = td.closest('.customer-row');
+ editEl.querySelector('textarea').value = row.getAttribute('data-remark') || '';
+ editEl.style.display = 'none';
+ displayEl.style.display = 'flex';
+ });
+ }
+ });
+
+ // ========== 快速入库（录入漏扫单号） ==========
+ function showQuickAdd(btn, customerId, customerName) {
+ // 如果已有展开的输入框，先关闭
+ document.querySelectorAll('.quick-add-inline').forEach(el => el.remove());
+ const td = btn.parentElement;
+ const div = document.createElement('div');
+ div.className = 'quick-add-inline';
+ div.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:6px;';
+ div.innerHTML = '<input type="text" id="quick-add-input-' + customerId + '" placeholder="输入快递单号…" style="width:130px;padding:5px 8px;border:1px solid #1565c0;border-radius:4px;font-size:12px;" onkeydown="if(event.key===\'Enter\')submitQuickAdd(' + customerId + ',\'' + customerName.replace(/'/g, "\\'") + '\')">' +
+ '<button class="btn" onclick="submitQuickAdd(' + customerId + ',\'' + customerName.replace(/'/g, "\\'") + '\')" style="padding:5px 8px;font-size:11px;background:#1565c0;color:#fff;">确定</button>' +
+ '<button class="btn" onclick="cancelQuickAdd()" style="padding:5px 8px;font-size:11px;background:var(--bg-input);border:1px solid var(--border);color:var(--text-secondary);">取消</button>';
+ td.appendChild(div);
+ setTimeout(function() { document.getElementById('quick-add-input-' + customerId).focus(); }, 100);
+ }
+
+ async function submitQuickAdd(customerId, customerName) {
+ const input = document.getElementById('quick-add-input-' + customerId);
+ const tracking = input.value.trim();
+ if (!tracking) { showToast('请输入快递单号', 'warning'); input.focus(); return; }
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest('/api/inbound/quick_add', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ customer_id: customerId, tracking_number: tracking })
+ });
+ showToast(result.message || '录入成功', 'success');
+ cancelQuickAdd();
+ setTimeout(function() { window.location.reload(); }, 600);
+ } catch (e) {
+ showToast(e.message || '录入失败', 'error');
+ input.focus();
+ } finally {
+ unlockAction();
+ }
+ }
+
+ function cancelQuickAdd() {
+ document.querySelectorAll('.quick-add-inline').forEach(function(el) { el.remove(); });
+ }
+
+ document.addEventListener('click', function(e) {
+ if (!e.target.closest('.quick-add-inline') && !e.target.closest('button[onclick*="showQuickAdd"]')) {
+ cancelQuickAdd();
+ }
+ });
+</script>
+
+<style>
+ @keyframes shake {
+ 0%, 100% { transform: translateX(0); }
+ 25% { transform: translateX(-6px); }
+ 50% { transform: translateX(6px); }
+ 75% { transform: translateX(-4px); }
+ }
+ .customer-row:hover {
+ background: var(--bg-input);
+ }
+ .customer-row {
+ transition: background 0.2s ease;
+ }
+ .hung-complete {
+ background: rgba(34,197,94,0.10) !important;
+ }
+ .hung-incomplete {
+ background: rgba(239,68,68,0.10) !important;
+ }
+ .hung-complete:hover {
+ background: rgba(34,197,94,0.18) !important;
+ }
+ .hung-incomplete:hover {
+ background: rgba(239,68,68,0.18) !important;
+ }
+ #barcode-scan-input:focus {
+ border-color: #1565c0 !important;
+ box-shadow: 0 0 0 3px rgba(21,101,192,0.15);
+ }
+</style>
+{% endblock %}

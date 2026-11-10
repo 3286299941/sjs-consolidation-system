@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+<div class="card-title">全部单号</div>
+
+<!-- 筛选栏 -->
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end;">
+<div class="form-group" style="margin-bottom: 0;">
+<label>邮编</label>
+<select id="zip-filter" onchange="applyFilters()" style="padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;">
+<option value="">全部邮编</option>
+{% for z in zip_codes %}
+<option value="{{ z }}" {% if selected_zip == z %}selected{% endif %}>{{ z }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="form-group" style="margin-bottom: 0;">
+<label>客户</label>
+<div class="cs-wrapper" id="cs-w-orders" style="position: relative; display: inline-block;">
+<select id="customer-filter" style="display:none;">
+<option value="">全部客户</option>
+{% for c in customers %}
+<option value="{{ c.id }}" data-name="{{ c.name }}" data-barcode="{{ c.barcode }}" data-no="{{ c.customer_no }}" {% if selected_customer == c.id %}selected{% endif %}>{{ c.name }}</option>
+{% endfor %}
+</select>
+<div id="cs-sel-orders" style="display:none;margin-bottom:4px;padding:4px 8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:4px;font-size:12px;justify-content:space-between;align-items:center;">
+<span id="cs-label-orders" style="color:#818cf8;"></span>
+<button type="button" onclick="csClearOrd()" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.2);color:#dc2626;border-radius:3px;padding:1px 5px;cursor:pointer;font-size:11px;">×</button>
+</div>
+<input type="text" id="cs-in-orders" placeholder="搜索客户" autocomplete="off"
+style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:140px;"
+oninput="csSrOrd()" onkeydown="csNvOrd(event)" onfocus="csSrOrd()">
+<div id="cs-dd-orders" style="display:none;position:absolute;top:100%;left:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:999;max-height:240px;overflow-y:auto;margin-top:4px;min-width:180px;"></div>
+</div>
+</div>
+<div class="form-group" style="margin-bottom: 0;">
+<label>批次</label>
+<select id="batch-filter" onchange="applyFilters()" style="padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;">
+<option value="">全部批次</option>
+{% for b in batches %}
+<option value="{{ b.id }}" {% if selected_batch_id == b.id %}selected{% endif %}>{{ b.batch_no }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="form-group" style="margin-bottom: 0;">
+<label>性质</label>
+<select id="nature-filter" onchange="applyFilters()" style="padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;">
+<option value="">全部</option>
+<option value="普" {% if selected_nature == '普' %}selected{% endif %}>普货</option>
+<option value="敏" {% if selected_nature == '敏' %}selected{% endif %}>敏货</option>
+</select>
+</div>
+<div class="form-group" style="margin-bottom: 0;">
+<label>单号搜索</label>
+<input type="text" id="tracking-search" placeholder="输入单号" value="{{ tracking_number }}"
+style="padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; width: 160px;"
+onkeydown="if(event.key==='Enter') applyFilters()">
+</div>
+<div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+<button class="btn" onclick="applyFilters()">筛选</button>
+</div>
+<div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+<button class="btn btn-secondary" onclick="resetFilters()">重置</button>
+</div>
+</div>
+
+{% if records %}
+<div style="margin-bottom: 15px;">
+<strong>共 {{ total_count }} 条记录</strong>
+</div>
+
+<div style="overflow-x: auto;">
+<table>
+<thead>
+<tr>
+<th>序号</th>
+<th>入库时间</th>
+<th>客户</th>
+<th>快递单号</th>
+<th>性质</th>
+<th>状态</th>
+<th>批次</th>
+<th>锁定时间</th>
+<th>收货地址</th>
+</tr>
+</thead>
+<tbody>
+{% for r in records %}
+{% set customer = customers_map.get(r.customer_id) %}
+{% set bid = effective_batch.get(r.id) %}
+{% set batch = batches_map.get(bid) %}
+<tr>
+<td>{{ loop.index }}</td>
+<td>{{ r.entry_time.strftime('%Y-%m-%d %H:%M') }}</td>
+<td><strong>{{ customer.name if customer else '' }}</strong></td>
+<td><code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 12px;">{{ r.tracking_number }}</code></td>
+<td>
+{% if r.nature == '敏' %}
+<span class="badge badge-danger">敏货</span>
+{% else %}
+<span class="badge badge-success">普货</span>
+{% endif %}
+</td>
+<td>
+{% set st = display_status.get(r.id, r.status or '') %}
+{% if st == '已入库' %}
+<span class="badge" style="background: #e0f2fe; color: #0284c7;">已入库</span>
+{% elif st == '待打包' %}
+<span class="badge" style="background: #fef3c7; color: #d97706;">待打包</span>
+{% elif st == '已打包' %}
+<span class="badge badge-success">已打包</span>
+{% elif st == '已合箱' %}
+<span class="badge" style="background: #ede9fe; color: #7c3aed;">已合箱</span>
+{% elif st == '已发货' %}
+<span class="badge" style="background: #dbeafe; color: #1e40af;">已发货</span>
+{% elif st == '已退货' %}
+<span class="badge" style="background: #fee2e2; color: #dc2626;">已退货</span>
+{% else %}
+<span class="badge">{{ st }}</span>
+{% endif %}
+</td>
+<td>{{ '单独地址' if bid == '__VIP_SOLO__' else (batch.batch_no if batch else '—') }}</td>
+<td>
+{% set st = display_status.get(r.id, r.status or '') %}
+{% if shipped_time.get(r.id) %}
+{{ shipped_time.get(r.id).strftime('%m/%d') }}
+{% elif batch and batch.is_locked and batch.lock_time %}
+{{ batch.lock_time.strftime('%m/%d') }}
+{% else %}
+—
+{% endif %}
+</td>
+<td style="font-size: 12px;">{{ r.receiving_address or '—' }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% if total_pages > 1 %}
+<div class="pagination-container">
+ <span class="page-info">共 {{ total_count }} 条，{{ page }}/{{ total_pages }} 页</span>
+ {% if page > 1 %}
+ <a href="?page=1&per_page={{ per_page }}{% if selected_customer %}&customer_id={{ selected_customer }}{% endif %}{% if selected_batch_id %}&batch_id={{ selected_batch_id }}{% endif %}{% if selected_zip %}&zip_code={{ selected_zip }}{% endif %}{% if selected_nature %}&nature={{ selected_nature }}{% endif %}{% if tracking_number %}&tracking_number={{ tracking_number }}{% endif %}" class="btn btn-secondary btn-xs">首页</a>
+ <a href="?page={{ page - 1 }}&per_page={{ per_page }}{% if selected_customer %}&customer_id={{ selected_customer }}{% endif %}{% if selected_batch_id %}&batch_id={{ selected_batch_id }}{% endif %}{% if selected_zip %}&zip_code={{ selected_zip }}{% endif %}{% if selected_nature %}&nature={{ selected_nature }}{% endif %}{% if tracking_number %}&tracking_number={{ tracking_number }}{% endif %}" class="btn btn-secondary btn-xs">上一页</a>
+ {% endif %}
+ {% if page < total_pages %}
+ <a href="?page={{ page + 1 }}&per_page={{ per_page }}{% if selected_customer %}&customer_id={{ selected_customer }}{% endif %}{% if selected_batch_id %}&batch_id={{ selected_batch_id }}{% endif %}{% if selected_zip %}&zip_code={{ selected_zip }}{% endif %}{% if selected_nature %}&nature={{ selected_nature }}{% endif %}{% if tracking_number %}&tracking_number={{ tracking_number }}{% endif %}" class="btn btn-secondary btn-xs">下一页</a>
+ <a href="?page={{ total_pages }}&per_page={{ per_page }}{% if selected_customer %}&customer_id={{ selected_customer }}{% endif %}{% if selected_batch_id %}&batch_id={{ selected_batch_id }}{% endif %}{% if selected_zip %}&zip_code={{ selected_zip }}{% endif %}{% if selected_nature %}&nature={{ selected_nature }}{% endif %}{% if tracking_number %}&tracking_number={{ tracking_number }}{% endif %}" class="btn btn-secondary btn-xs">末页</a>
+ {% endif %}
+</div>
+{% endif %}
+</div>
+{% else %}
+<div class="empty-state">
+<p>暂无单号数据</p>
+</div>
+{% endif %}
+</div>
+
+<script>
+// ===== 客户搜索 =====
+var _csOrdIdx = -1;
+function csSrOrd() {
+var inp = document.getElementById('cs-in-orders');
+var dd = document.getElementById('cs-dd-orders');
+var val = inp.value.trim().toLowerCase();
+_csOrdIdx = -1;
+if (!val) { dd.style.display = 'none'; return; }
+var sel = document.getElementById('customer-filter');
+var hits = Array.from(sel.options).filter(function(o) {
+if (!o.value) return false;
+var n = (o.dataset.name||'').toLowerCase();
+var b = (o.dataset.barcode||'').toLowerCase();
+var no = (o.dataset.no||'').toLowerCase();
+return val.length >= 1 && (n.includes(val) || b.includes(val) || no.includes(val));
+});
+dd.innerHTML = '';
+if (!hits.length) { dd.style.display = 'none'; return; }
+hits.slice(0, 15).forEach(function(o, i) {
+var div = document.createElement('div');
+div.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid rgba(148,163,184,0.12);font-size:12px;';
+div.innerHTML = '<strong>' + o.dataset.name + '</strong> <span style="color:#818cf8;font-size:10px;">(' + o.dataset.barcode + ')</span>';
+div.onclick = (function(oid, oname, obc) { return function() { csPkOrd(oid, oname, obc); }; })(o.value, o.dataset.name, o.dataset.barcode);
+div.onmouseenter = function() { Array.from(dd.children).forEach(function(d){d.style.background='';}); div.style.background='rgba(6,182,212,0.1)'; _csOrdIdx=i; };
+dd.appendChild(div);
+});
+dd.style.display = 'block';
+}
+function csNvOrd(e) {
+var dd = document.getElementById('cs-dd-orders');
+var items = Array.from(dd.children);
+if (!items.length) return;
+if (e.key === 'ArrowDown') { e.preventDefault(); _csOrdIdx=Math.min((_csOrdIdx||0)+1, items.length-1); items.forEach(function(c,i){c.style.background=i===_csOrdIdx?'rgba(6,182,212,0.1)':'';}); items[_csOrdIdx].scrollIntoView({block:'nearest'}); }
+else if (e.key === 'ArrowUp') { e.preventDefault(); _csOrdIdx=Math.max((_csOrdIdx||0)-1, 0); items.forEach(function(c,i){c.style.background=i===_csOrdIdx?'rgba(6,182,212,0.1)':'';}); items[_csOrdIdx].scrollIntoView({block:'nearest'}); }
+else if (e.key === 'Enter') { e.preventDefault(); if (_csOrdIdx>=0) items[_csOrdIdx].click(); else if (items.length===1) items[0].click(); }
+else if (e.key === 'Escape') { dd.style.display = 'none'; }
+}
+function csPkOrd(cid, cname, cbarcode) {
+var sel = document.getElementById('customer-filter');
+var inp = document.getElementById('cs-in-orders');
+var dd = document.getElementById('cs-dd-orders');
+var sd = document.getElementById('cs-sel-orders');
+var lb = document.getElementById('cs-label-orders');
+sel.value = cid;
+lb.innerHTML = '<strong>' + cname + '</strong> <span style="font-size:10px;color:#94a3b8;">(' + cbarcode + ')</span>';
+sd.style.display = 'flex';
+inp.value = cbarcode || cname;
+dd.style.display = 'none';
+if (!window._csOrdInit) applyFilters();
+}
+function csClearOrd() {
+var sel = document.getElementById('customer-filter');
+var inp = document.getElementById('cs-in-orders');
+var dd = document.getElementById('cs-dd-orders');
+var sd = document.getElementById('cs-sel-orders');
+sel.value = '';
+sd.style.display = 'none';
+inp.value = '';
+dd.style.display = 'none';
+if (!window._csOrdInit) applyFilters();
+}
+document.addEventListener('click', function(e) {
+if (!e.target.closest('#cs-w-orders')) {
+document.getElementById('cs-dd-orders').style.display = 'none';
+}
+});
+
+function applyFilters() {
+const params = new URLSearchParams();
+const customerId = document.getElementById('customer-filter').value;
+const batchId = document.getElementById('batch-filter').value;
+const tracking = document.getElementById('tracking-search').value.trim();
+const zip = document.getElementById('zip-filter').value;
+const nature = document.getElementById('nature-filter').value;
+if (customerId) params.set('customer_id', customerId);
+if (batchId) params.set('batch_id', batchId);
+if (tracking) params.set('tracking_number', tracking);
+if (zip) params.set('zip_code', zip);
+if (nature) params.set('nature', nature);
+window.location.href = '/all_orders?' + params.toString();
+}
+
+function resetFilters() {
+window.location.href = '/all_orders';
+}
+
+// 初始化
+ document.addEventListener('DOMContentLoaded', function() {
+window._csOrdInit = true;
+var sel = document.getElementById('customer-filter');
+if (sel.value) {
+var opt = sel.options[sel.selectedIndex];
+if (opt && opt.dataset.name) {
+csPkOrd(sel.value, opt.dataset.name, opt.dataset.barcode || '');
+}
+}
+window._csOrdInit = false;
+});
+</script>
+{% endblock %}

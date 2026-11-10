@@ -1,0 +1,1484 @@
+﻿{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+
+ {% if view != 'channel' %}
+ <!-- 快捷操作栏 -->
+ <div style="margin-bottom: 15px; padding: 15px 20px; background: linear-gradient(135deg, #1565c0, #0d47a1); border-radius: 10px; color: white;">
+ <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px;">
+ <div style="display: flex; gap: 15px; align-items: center; flex: 1;">
+ <span>已选择 <strong id="batch-selected-count">0</strong> 条记录</span>
+ <button class="btn" onclick="batchPrintLabels()" id="batch-print-btn" disabled style="padding: 6px 15px; background: #0d47a1; color: white;"> 批量打印标签</button>
+ <button class="btn" onclick="batchCompleteRecords()" id="batch-complete-btn" disabled style="padding: 6px 15px; background: #0d47a1; color: white;"> 批量完成</button>
+ <button class="btn btn-secondary" onclick="batchEdit()" id="batch-edit-btn" disabled style="padding: 6px 15px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3);"> 批量编辑</button>
+ </div>
+ <button class="btn btn-secondary" onclick="clearBatchSelection()" style="padding: 6px 15px; background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3);"> 清空选择</button>
+ </div>
+ </div>
+
+ <!-- 快速扫描编辑区 -->
+ <div id="quick-scan-bar" style="margin-bottom: 15px; padding: 15px 20px; background: linear-gradient(135deg, rgba(21,101,192,0.06), rgba(21,101,192,0.12)); border-radius: 10px; border: 2px solid #1565c0;">
+ <div style="display: flex; align-items: center; gap: 15px;">
+ <div style="font-weight: 600; color: #1565c0; font-size: 15px; white-space: nowrap;"> 快速编辑</div>
+ <input type="text" id="quick-scan-input" placeholder=" 扫描包裹条形码，自动进入编辑" 
+ style="flex: 1; padding: 12px 18px; border: 2px solid #1565c0; border-radius: 8px; font-size: 16px; background: var(--bg-card); outline: none;"
+ autofocus>
+ <div id="quick-scan-status" style="font-size: 13px; color: var(--text-muted); white-space: nowrap;">
+ 等待扫描...
+ </div>
+ <button class="camera-btn camera-btn-xs" onclick="openCameraScanner('quick-scan-input')" title="摄像头扫描">
+ 
+ </button>
+ </div>
+ </div>
+
+ <!-- 筛选栏 -->
+ <div class="search-box" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 20px;">
+ <div class="cs-wrapper" id="cs-w-pkrec" style="position:relative; display:inline-block;">
+ <select id="filter-customer" style="display:none;" onchange="loadRecords()">
+ <option value="">全部客户</option>
+ {% for c in customers %}
+ <option value="{{ c.id }}" data-name="{{ c.name }}" data-barcode="{{ c.barcode }}" data-no="{{ c.customer_no }}" data-zip="{{ c.zip_code|default('') }}">{{ c.name }}</option>
+ {% endfor %}
+ </select>
+ <div id="cs-sel-pkrec" style="display:none;margin-bottom:5px;padding:5px 10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:6px;font-size:12px;justify-content:space-between;align-items:center;">
+ <span id="cs-sel-lbl-pkrec" style="color:#1565c0;"></span>
+ <button type="button" onclick="csClrPk()" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#dc2626;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:11px;">×</button>
+ </div>
+ <div style="display:flex;gap:5px;">
+ <input type="text" id="cs-in-pkrec" placeholder=" 搜索客户" autocomplete="off" autocorrect="off" spellcheck="false"
+ style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;min-width:150px;"
+ oninput="csSrPk()" onkeydown="csNvPk(event)" onfocus="csSrPk()">
+ </div>
+ <div id="cs-dd-pkrec" style="display:none;position:absolute;top:100%;left:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:999;max-height:240px;overflow-y:auto;margin-top:4px;min-width:200px;"></div>
+ </div>
+
+ <select id="filter-batch" onchange="loadRecords()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; min-width: 150px;">
+ <option value="">全部批次</option>
+ {% for b in batches %}
+ <option value="{{ b.id }}">{{ b.batch_no }} ({{ batch_packed_counts.get(b.id, 0) }}件)</option>
+ {% endfor %}
+ </select>
+
+ <select id="filter-nature" onchange="loadRecords()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;">
+ <option value="">全部性质</option>
+ <option value="普"> 普货</option>
+ <option value="敏"> 敏货</option>
+ </select>
+
+ <select id="filter-cartoned" onchange="loadRecords()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;">
+ <option value="">全部状态</option>
+ <option value="0"> 未合箱</option>
+ <option value="1"> 已合箱</option>
+ </select>
+
+ <select id="filter-status" onchange="loadRecords()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;">
+ <option value="">全部进度</option>
+ <option value="待合箱"> 待合箱</option>
+ <option value="已合箱"> 已合箱</option>
+ <option value="已发货"> 已发货</option>
+ </select>
+
+ <select id="filter-fullbox" onchange="loadRecords()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;">
+ <option value="">整箱·全部</option>
+ <option value="1"> 仅整箱</option>
+ <option value="0"> 仅非整箱</option>
+ </select>
+
+ <input type="date" id="filter-start" onchange="loadRecords()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;">
+ <span style="color: var(--text-muted);">至</span>
+ <input type="date" id="filter-end" onchange="loadRecords()" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;">
+
+ <button class="btn btn-secondary" onclick="resetFilters()" style="padding: 8px 15px; font-size: 13px;"> 重置筛选</button>
+ <span id="record-count" style="margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text-secondary); white-space: nowrap;"></span>
+
+ <!-- 测量状态指示 -->
+ <div id="unmeasured-bar" style="display: flex; align-items: center; gap: 6px; padding: 6px 14px; background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 6px; font-size: 12px; font-weight: 600; color: #1565c0; white-space: nowrap; border: 1px solid #90caf9;">
+   <span style="font-size: 11px; opacity: 0.8;">未测量</span>
+   <span id="unmeasured-count" style="font-size: 16px; font-weight: 700;">0</span>
+ </div>
+ <div id="device-latest-bar" style="display: flex; align-items: center; gap: 6px; padding: 6px 14px; background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 6px; font-size: 12px; font-weight: 600; color: #1565c0; white-space: nowrap; border: 1px solid #90caf9; opacity: 0.6; transition: opacity 0.2s;">
+   <span style="font-size: 11px; opacity: 0.8;">设备</span>
+   <span id="device-latest-text" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">等待推送...</span>
+   <span id="device-latest-detail" style="color: #0d47a1;"></span>
+ </div>
+ </div>
+
+ <!-- 表格 -->
+ <div style="overflow-x: auto;">
+ <table id="records-table">
+ <thead>
+ <tr>
+ <th style="width: 40px;"><input type="checkbox" id="select-all" onchange="toggleSelectAll()"></th>
+ <th style="width: 40px;">序号</th>
+ <th style="width: 90px;">客户</th>
+ <th style="width: 60px;">邮编</th>
+ <th style="width: 90px;">批次</th>
+ <th style="width: 70px;">标签</th>
+ <th style="width: 55px;">性质</th>
+ <th style="width: 55px;">重量</th>
+ <th style="width: 90px;">尺寸</th>
+ <th style="width: 55px;">体积重</th>
+ <th style="width: 75px;">状态</th>
+ <th style="width: 100px;">备注</th>
+ <th style="width: 170px;">操作</th>
+ </tr>
+ </thead>
+ <tbody id="records-tbody">
+ <tr>
+ <td colspan="13" class="empty-state">加载中...</td>
+ </tr>
+ </tbody>
+ </table>
+ </div>
+ <div id="records-tbl-pagination" class="pagination-container"></div>
+
+ <!-- 统计汇总 -->
+ <div id="summary-bar" style="display: none; margin-top: 15px; padding: 12px 15px; background: linear-gradient(135deg, rgba(21,101,192,0.06), rgba(21,101,192,0.12)); border-radius: 10px; font-size: 13px; display: flex; gap: 30px; flex-wrap: wrap;">
+ <span> 总包裹数: <strong id="sum-count">0</strong> 件</span>
+ <span> 总重量: <strong id="sum-weight">0</strong> kg</span>
+ <span> 总体积重: <strong id="sum-vol">0</strong> kg</span>
+ <span> 总运费: <strong id="sum-freight" style="color: #1565c0;">$0.00</strong></span>
+ <span> 普货: <strong id="sum-normal" style="color: #1565c0;">0</strong> 件</span>
+ <span> 敏货: <strong id="sum-danger" style="color: #dc2626;">0</strong> 件</span>
+ </div>
+</div>
+
+<!-- 编辑弹窗 -->
+<div class="modal" id="edit-modal">
+ <div class="modal-content" style="max-width: 600px;">
+ <div class="modal-title">编辑打包记录</div>
+ <form id="edit-form">
+ <input type="hidden" id="edit-id">
+
+ <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+ <div class="form-group">
+ <label>客户姓名</label>
+ <input type="text" id="edit-customer-name" readonly style="background: var(--bg-input);">
+ </div>
+ <div class="form-group">
+ <label>序号标签</label>
+ <input type="text" id="edit-serial" readonly style="background: var(--bg-input);">
+ </div>
+ </div>
+
+ <div class="form-group">
+ <label>入库单号</label>
+ <input type="text" id="edit-trackings" readonly style="background: var(--bg-input);">
+ </div>
+
+ <div class="form-group">
+ <label>内容物描述</label>
+ <textarea id="edit-contents" rows="2" placeholder="填写包裹内的商品内容"></textarea>
+ </div>
+
+ <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+ <div class="form-group">
+ <label>批次</label>
+ <select id="edit-batch-id" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+ <option value="">-- 不指定批次 --</option>
+ {% for b in batches %}
+ <option value="{{ b.id }}">{{ b.batch_no }}</option>
+ {% endfor %}
+ </select>
+ </div>
+ <div class="form-group">
+ <label>货物性质</label>
+ <select id="edit-nature" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+ <option value="普"> 普货</option>
+ <option value="敏"> 敏货</option>
+ </select>
+ </div>
+ </div>
+
+ <div style="margin-bottom: 8px; padding: 8px 10px; background: rgba(124,45,18,0.06); border: 1px solid rgba(124,45,18,0.25); border-radius: 6px;">
+ <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #7c2d12; cursor: pointer;">
+ <input type="checkbox" id="edit-fullbox" style="width: 18px; height: 18px; cursor: pointer;">
+ 整箱（合箱时单独装箱，不与其他客户混装）
+ </label>
+ </div>
+
+ <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+ <div class="form-group">
+ <label>实际重量 (kg)</label>
+ <input type="number" id="edit-weight" step="0.1" min="0" placeholder="0.0" oninput="calcEditVol()" class="nav-input" data-nav="weight">
+ </div>
+ <div class="form-group">
+ <label>长度 (cm)</label>
+ <input type="number" id="edit-length" step="0.1" min="0" placeholder="0" oninput="calcEditVol()" class="nav-input" data-nav="length">
+ </div>
+ <div class="form-group">
+ <label>宽度 (cm)</label>
+ <input type="number" id="edit-width" step="0.1" min="0" placeholder="0" oninput="calcEditVol()" class="nav-input" data-nav="width">
+ </div>
+ <div class="form-group">
+ <label>高度 (cm)</label>
+ <input type="number" id="edit-height" step="0.1" min="0" placeholder="0" oninput="calcEditVol()" class="nav-input" data-nav="height">
+ </div>
+ </div>
+
+ <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 8px;">
+ <div class="form-group">
+ <label>体积重</label>
+ <input type="number" id="edit-vol-weight" step="0.1" min="0" placeholder="体积重" readonly style="background: var(--bg-input);">
+ </div>
+ <div class="form-group">
+ <label>计费重</label>
+ <input type="number" id="edit-chargeable" step="0.1" min="0" placeholder="计费重" readonly style="background: var(--bg-input);">
+ </div>
+ </div>
+
+ <div style="padding: 10px; background: rgba(217,119,6,0.1); border-radius: 4px; font-size: 13px; color: #d97706; margin-bottom: 10px;">
+ 体积重 = 长×宽×高÷6000（0.5进位）&nbsp;|&nbsp;计费重 = max(体积重, 实际重, 1kg)（0.5进位）
+ </div>
+ </form>
+ <div class="modal-footer">
+ <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+ <button class="btn" onclick="saveEdit(false)">保存</button>
+ </div>
+ </div>
+</div>
+
+<!-- 包裹详情弹窗 -->
+<div class="modal" id="detail-modal">
+ <div class="modal-content" style="max-width: 500px;">
+ <div class="modal-title"> 包裹详情</div>
+ <div id="detail-content" style="padding: 10px 0;">
+ <!-- 动态填充 -->
+ </div>
+ <div class="modal-footer">
+ <button class="btn" onclick="closeDetailModal()">关闭</button>
+ </div>
+ </div>
+</div>
+
+<!-- 批量编辑弹窗 -->
+<div class="modal" id="batch-edit-modal">
+ <div class="modal-content" style="max-width: 500px;">
+ <div class="modal-title">批量编辑数据</div>
+ <div class="form-group">
+ <label>批量设置重量 (kg，留空表示不修改)</label>
+ <input type="number" id="batch-weight" step="0.1" min="0" placeholder="统一设置重量">
+ </div>
+ <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+ <div class="form-group">
+ <label>长度 (cm)</label>
+ <input type="number" id="batch-length" step="0.1" min="0" placeholder="统一设置">
+ </div>
+ <div class="form-group">
+ <label>宽度 (cm)</label>
+ <input type="number" id="batch-width" step="0.1" min="0" placeholder="统一设置">
+ </div>
+ <div class="form-group">
+ <label>高度 (cm)</label>
+ <input type="number" id="batch-height" step="0.1" min="0" placeholder="统一设置">
+ </div>
+ </div>
+ <div class="form-group">
+ <label>批量设置内容物描述</label>
+ <textarea id="batch-contents" rows="2" placeholder="统一设置内容物描述，留空表示不修改"></textarea>
+ </div>
+ <div class="modal-footer">
+ <button class="btn btn-secondary" onclick="closeBatchEditModal()">取消</button>
+ <button class="btn" onclick="saveBatchEdit()">批量保存</button>
+ </div>
+ </div>
+</div>
+
+<!-- Ctrl+F 查找栏 -->
+<div id="find-bar" style="display: none; position: fixed; top: 60px; right: 20px; background: #1e293b; color: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999; min-width: 280px;">
+ <div style="display: flex; gap: 8px; align-items: center;">
+ <input type="text" id="find-input" placeholder="输入关键词搜索..." onkeydown="handleFindKey(event)" style="flex: 1; padding: 6px 10px; border: 1px solid #475569; border-radius: 4px; background: #334155; color: white; font-size: 13px;" autofocus>
+ <span id="find-counter" style="font-size: 12px; color: #94a3b8; white-space: nowrap;"></span>
+ <button onclick="findPrev()" style="background: #475569; border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 13px;">↑</button>
+ <button onclick="findNext()" style="background: #475569; border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 13px;">↓</button>
+ <button onclick="closeFindBar()" style="background: #f87171; border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 13px;">×</button>
+ </div>
+</div>
+
+<style>
+#records-table { min-width: 960px; }
+#records-table th, #records-table td { padding: 8px 6px; }
+ #records-table td:last-child .btn { white-space: nowrap; }
+ #records-table th { white-space: nowrap; position: sticky; top: 0; background: var(--bg-input); z-index: 1; }
+ .record-row:hover { background: rgba(6,182,212,0.08) !important; cursor: pointer; }
+ .record-row.selected { background: rgba(99,102,241,0.1) !important; }
+ .highlight { background: rgba(234,179,8,0.25) !important; outline: 2px solid #eab308; outline-offset: -2px; border-radius: 2px; }
+ .editable-cell { cursor: pointer; }
+ .editable-cell:hover { background: rgba(99,102,241,0.08); }
+ .editable-input { width: 80px; padding: 4px; border: 1px solid #1565c0; border-radius: 4px; font-size: 13px; text-align: center; }
+</style>
+
+<script>
+ 'use strict';
+
+ // ========== 全局状态 ==========
+ let allRecords = [];
+ let selectedIds = new Set();
+ let findIndex = -1;
+ let findMatches = [];
+ let lastEditId = null; // 记住刚编辑的记录，刷新后滚动到该行
+ let lastPaginatorCtrl = null; // 保留 Paginator 控制器引用
+ let isLoading = false;
+
+ // ========== 快捷键支持 ==========
+ document.addEventListener('keydown', e => {
+ if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+ e.preventDefault();
+ openFindBar();
+ }
+ if (e.key === 'Escape') {
+ closeFindBar();
+ }
+ });
+
+ // ========== Ctrl+F 查找栏 ==========
+ function openFindBar() {
+ document.getElementById('find-bar').style.display = 'block';
+ document.getElementById('find-input').focus();
+ }
+
+ function closeFindBar() {
+ document.getElementById('find-bar').style.display = 'none';
+ clearHighlights();
+ }
+
+ function clearHighlights() {
+ document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
+ }
+
+ function handleFindKey(e) {
+ if (e.key === 'Enter') {
+ e.shiftKey ? findPrev() : findNext();
+ }
+ }
+
+ function doFind() {
+ const keyword = document.getElementById('find-input').value.trim().toLowerCase();
+ const counter = document.getElementById('find-counter');
+ if (!keyword) {
+ clearHighlights();
+ counter.textContent = '';
+ findMatches = [];
+ findIndex = -1;
+ return;
+ }
+ clearHighlights();
+ findMatches = [];
+ const rows = document.querySelectorAll('#records-tbody tr');
+ rows.forEach(row => {
+ const text = row.textContent.toLowerCase();
+ if (text.includes(keyword)) {
+ row.classList.add('highlight');
+ findMatches.push(row);
+ }
+ });
+ if (findMatches.length > 0) {
+ findIndex = 0;
+ findMatches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+ counter.textContent = `1/${findMatches.length}`;
+ } else {
+ findIndex = -1;
+ counter.textContent = '0 条';
+ }
+ }
+
+ function findNext() {
+ if (findMatches.length === 0) { doFind(); return; }
+ findIndex = (findIndex + 1) % findMatches.length;
+ findMatches[findIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+ document.getElementById('find-counter').textContent = `${findIndex + 1}/${findMatches.length}`;
+ }
+
+ function findPrev() {
+ if (findMatches.length === 0) { doFind(); return; }
+ findIndex = (findIndex - 1 + findMatches.length) % findMatches.length;
+ findMatches[findIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+ document.getElementById('find-counter').textContent = `${findIndex + 1}/${findMatches.length}`;
+ }
+
+ document.getElementById('find-input').addEventListener('input', doFind);
+
+ // ========== 核心函数 ==========
+ async function loadRecords() {
+ if (isLoading) return;
+ isLoading = true;
+
+ const customerId = document.getElementById('filter-customer').value;
+ const batchId = document.getElementById('filter-batch').value;
+ const nature = document.getElementById('filter-nature').value;
+ const isCartoned = document.getElementById('filter-cartoned').value;
+ const status = document.getElementById('filter-status').value;
+ const isFullBox = document.getElementById('filter-fullbox').value;
+ const startDate = document.getElementById('filter-start').value;
+ const endDate = document.getElementById('filter-end').value;
+
+ const tbody = document.getElementById('records-tbody');
+ tbody.innerHTML = '<tr><td colspan="13" class="empty-state">加载中...</td></tr>';
+ var rcEl = document.getElementById('record-count'); if (rcEl) rcEl.textContent = '';
+ document.getElementById('summary-bar').style.display = 'none';
+
+ const params = new URLSearchParams();
+ if (customerId) params.set('customer_id', customerId);
+ if (batchId) params.set('batch_id', batchId);
+ if (nature) params.set('nature', nature);
+ if (isCartoned) params.set('is_cartoned', isCartoned);
+ if (status) params.set('status', status);
+ if (isFullBox) params.set('is_full_box', isFullBox);
+ if (startDate) params.set('start_date', startDate);
+ if (endDate) params.set('end_date', endDate);
+
+ try {
+ const response = await fetch('/api/packed/records?' + params.toString());
+ if (!response.ok) {
+ const errData = await response.json().catch(() => ({}));
+ throw new Error(errData.message || '请求失败: ' + response.status);
+ }
+ const data = await response.json();
+ // 支持直接返回数组或 {success:true, data:[]} 两种格式
+ const records = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
+ allRecords = records;
+ renderTable(records);
+ } catch (e) {
+ console.error('加载打包记录失败:', e);
+ tbody.innerHTML = `<tr><td colspan="13" class="empty-state" style="color:#dc2626;">加载失败: ${e.message || '未知错误'}<br><button class="btn btn-secondary" onclick="loadRecords()" style="margin-top:10px;">重试</button></td></tr>`;
+ } finally {
+ isLoading = false;
+ }
+ }
+
+ function renderTable(records) {
+ const tbody = document.getElementById('records-tbody');
+ if (!records || records.length === 0) {
+ tbody.innerHTML = '<tr><td colspan="14" class="empty-state">暂无打包记录</td></tr>';
+ var rcEl = document.getElementById('record-count'); if (rcEl) rcEl.textContent = '共 0 条记录';
+ document.getElementById('summary-bar').style.display = 'none';
+ // Remove existing pagination
+ var pc = document.getElementById('records-tbl-pagination');
+ if (pc) pc.innerHTML = '';
+ return;
+ }
+
+ var rcEl = document.getElementById('record-count'); if (rcEl) rcEl.textContent = `共 ${records.length} 条记录`;
+
+ // 计算未测量数据包裹数量
+ const unmeasured = records.filter(r => !r.weight || r.weight <= 0 || !r.length || r.length <= 0 || !r.width || r.width <= 0 || !r.height || r.height <= 0).length;
+ document.getElementById('unmeasured-count').textContent = unmeasured;
+
+ let html = '';
+ records.forEach((r, i) => {
+ const statusBadge = getStatusBadge(r.status);
+ const isCartoned = r.is_cartoned ? '已合箱' : '未合箱';
+ const cartonedBadge = r.is_cartoned ?
+ '<span class="badge" style="background: rgba(21,101,192,0.1); color: #1565c0;"> 已合箱</span>' :
+ '<span style="background: rgba(217,119,6,0.12); color: #d97706; padding: 2px 8px; border-radius: 4px; font-size: 12px;"> 未合箱</span>';
+ const natureLabel = r.nature === '敏' ?
+ '<span class="badge badge-danger" style="white-space:nowrap;">敏货</span>' :
+ '<span class="badge badge-success" style="white-space:nowrap;">普货</span>';
+ const fullBoxBadge = r.is_full_box ?
+ '<span style="white-space:nowrap; margin-left: 6px; font-size: 12px; color: #9c6f54;">整箱</span>' : '';
+
+ const weightVal = (r.weight && r.weight > 0) ? r.weight.toFixed(1) : '—';
+ const volVal = (r.volume_weight && r.volume_weight > 0) ? r.volume_weight.toFixed(1) : '—';
+ const sizeVal = (r.length > 0 && r.width > 0 && r.height > 0) ?
+ `${r.length}×${r.width}×${r.height}` : '—';
+
+ const trackingsArr = r.tracking_numbers || [];
+ const trackingsStr = Array.isArray(trackingsArr) ? trackingsArr.join(', ') : String(trackingsArr);
+
+ // Build action buttons based on status
+ let actionButtons = `
+ <button class="btn" style="padding: 1px 5px; font-size: 10px; line-height:1.6; background: #1565c0; color: white;" onclick="event.stopPropagation(); showDetail(${r.id})">详情</button>
+ <button class="btn" style="padding: 1px 5px; font-size: 10px; line-height:1.6; background: #0d47a1; color: white;" onclick="event.stopPropagation(); printLabel(${r.id})">打印</button>
+ <button class="btn btn-secondary" style="padding: 1px 5px; font-size: 10px; line-height:1.6;" onclick="event.stopPropagation(); openEdit(${r.id})">编辑</button>`;
+
+ if (r.status === '已发货' || r.status === '已合箱') {
+ actionButtons += `
+ <button class="btn" style="padding: 1px 5px; font-size: 10px; line-height:1.6; background: #0d47a1; color: white;" onclick="event.stopPropagation(); completeRecord(${r.id})">完成</button>`;
+ }
+
+ if (r.status !== '已完成' && r.status !== '已发货' && r.status !== '已合箱') {
+ actionButtons += `
+ <button class="btn" style="padding: 1px 5px; font-size: 10px; line-height:1.6; background: var(--warning); color: white;" onclick="event.stopPropagation(); rollbackRecord(${r.id})">回退</button>`;
+ }
+
+ html += `
+ <tr class="record-row" data-id="${r.id}" style="${r.is_full_box ? 'background:#fffbeb;' : ''}" data-search="${(r.customer_name + ' ' + (r.customer_no||'') + ' ' + (r.zip_code||'') + ' ' + r.serial_label + ' ' + (r.batch_no||'') + ' ' + trackingsStr).toLowerCase()}">
+ <td><input type="checkbox" class="row-check" value="${r.id}" onchange="updateSelection()"></td>
+ <td>${i + 1}</td>
+ <td>
+ <strong>${r.customer_name || '—'}</strong>
+ <div style="font-size:11px;color:#64748b;">${r.customer_no || ''}</div>
+ </td>
+ <td>${r.zip_code || '—'}</td>
+ <td>${r.batch_no || '—'}</td>
+ <td><strong style="color:#1565c0;">${r.serial_label}</strong></td>
+ <td>${natureLabel}${fullBoxBadge}</td>
+ <td class="editable-cell" onclick="openEdit(${r.id})">${weightVal} kg</td>
+ <td style="font-size:12px;">${sizeVal}</td>
+ <td>${volVal}</td>
+ <td>${statusBadge}</td>
+ <td style="font-size: 11px; max-width: 140px;">
+ ${r.customer_remark ? `<div style="background:rgba(245,158,11,0.12); border-left:3px solid #f59e0b; padding:2px 6px; border-radius:3px; font-size:11px; color:#92400e; font-weight:600; margin-bottom:2px; word-break:break-all;">${escapeHtml(r.customer_remark)}</div>` : ''}
+ ${r.abnormal_remark ? `<div style="background:rgba(239,68,68,0.1); border-left:3px solid #ef4444; padding:2px 6px; border-radius:3px; font-size:11px; color:#991b1b; font-weight:600; word-break:break-all;">${escapeHtml(r.abnormal_remark)}</div>` : ''}
+ </td>
+ <td>
+ <div style="display:flex;gap:5px;flex-wrap:wrap;">
+ ${actionButtons}
+ </div>
+ </td>
+ </tr>`;
+ });
+ tbody.innerHTML = html;
+
+ // 更新汇总
+ const totalWeight = records.reduce((s, r) => s + (r.weight || 0), 0);
+ const totalVol = records.reduce((s, r) => s + (r.volume_weight || 0), 0);
+ const totalFreight = records.reduce((s, r) => s + (r.freight || 0), 0);
+ const normalCount = records.filter(r => r.nature !== '敏').length;
+ const dangerCount = records.filter(r => r.nature === '敏').length;
+
+ document.getElementById('sum-count').textContent = records.length;
+ document.getElementById('sum-weight').textContent = totalWeight.toFixed(1);
+ document.getElementById('sum-vol').textContent = totalVol.toFixed(1);
+ document.getElementById('sum-freight').textContent = '$' + totalFreight.toFixed(2);
+ document.getElementById('sum-normal').textContent = normalCount;
+ document.getElementById('sum-danger').textContent = dangerCount;
+ document.getElementById('summary-bar').style.display = 'flex';
+
+ // 编辑/操作后滚动到目标行并高亮
+ if (lastEditId !== null) {
+ // 用 setTimeout 确保 DOM 已渲染完毕
+ setTimeout(() => {
+ const row = document.querySelector(`#records-tbody tr[data-id="${lastEditId}"]`);
+ if (row) {
+ row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+ row.style.transition = 'background 0.6s';
+ row.style.background = 'rgba(6,182,212,0.18)';
+ setTimeout(() => { row.style.background = ''; }, 1800);
+ }
+ lastEditId = null;
+ }, 50);
+ }
+ }
+
+ function toggleSelectAll() {
+ const checked = document.getElementById('select-all').checked;
+ document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+ updateSelection();
+ }
+
+ function updateSelection() {
+ selectedIds = new Set();
+ document.querySelectorAll('.row-check:checked').forEach(cb => selectedIds.add(parseInt(cb.value)));
+
+ document.querySelectorAll('.record-row').forEach(row => {
+ const id = parseInt(row.dataset.id);
+ if (selectedIds.has(id)) {
+ row.classList.add('selected');
+ } else {
+ row.classList.remove('selected');
+ }
+ });
+
+ const count = selectedIds.size;
+ document.getElementById('batch-selected-count').textContent = count;
+ document.getElementById('batch-print-btn').disabled = count === 0;
+ document.getElementById('batch-complete-btn').disabled = count === 0;
+ document.getElementById('batch-edit-btn').disabled = count === 0;
+ }
+
+ // 编辑成功后只更新当前行 DOM，不刷新整个列表
+ function updateRowInPlace(id, data) {
+ const row = document.querySelector(`#records-tbody tr[data-id="${id}"]`);
+ if (!row) return;
+ const cells = row.querySelectorAll('td');
+
+ // 更新 allRecords 缓存
+ const idx = allRecords.findIndex(r => r.id === id);
+ if (idx >= 0) Object.assign(allRecords[idx], data);
+
+ // 列顺序：checkbox(0) seq(1) customer(2) zip(3) batch(4) label(5) nature(6) weight(7) size(8) vol(9) status(10) remark(11) action(12)
+ if (data.weight !== undefined && cells[7]) {
+ cells[7].textContent = data.weight > 0 ? data.weight.toFixed(1) + ' kg' : '—';
+ }
+ if (data.length > 0 && data.width > 0 && data.height > 0 && cells[8]) {
+ cells[8].textContent = `${data.length}×${data.width}×${data.height}`;
+ const vol = Math.ceil(Math.ceil((data.length * data.width * data.height) / 6000 * 2) / 2 * 10) / 10;
+ if (cells[9]) cells[9].textContent = vol.toFixed(1);
+ }
+ if (data.nature !== undefined && cells[6]) {
+ const fb = (data.is_full_box !== undefined) ? data.is_full_box : (allRecords[idx] && allRecords[idx].is_full_box);
+ const fbBadge = fb ? '<span style="white-space:nowrap; margin-left: 6px; font-size: 12px; color: #9c6f54;">整箱</span>' : '';
+ cells[6].innerHTML = (data.nature === '敏'
+ ? '<span class="badge badge-danger" style="white-space:nowrap;">敏货</span>'
+ : '<span class="badge badge-success" style="white-space:nowrap;">普货</span>') + fbBadge;
+ }
+
+ // 高亮该行
+ row.style.transition = 'background 0.6s';
+ row.style.background = 'rgba(34,197,94,0.15)';
+ setTimeout(() => { row.style.background = ''; }, 1500);
+ }
+
+ function clearBatchSelection() {
+ document.querySelectorAll('.row-check').forEach(cb => cb.checked = false);
+ document.getElementById('select-all').checked = false;
+ updateSelection();
+ }
+
+ function batchPrintLabels() {
+ if (selectedIds.size === 0) {
+ showToast('请先选择记录', 'error');
+ return;
+ }
+ let index = 0;
+ selectedIds.forEach(id => {
+ setTimeout(() => {
+ window.open(`/print_packed_label/${id}`, `print_${id}`, 'width=420,height=500,toolbar=0,scrollbars=0,status=0');
+ }, index * 500);
+ index++;
+ });
+ showToast(`已打开 ${selectedIds.size} 个打印窗口`, 'success');
+ }
+
+ async function batchCompleteRecords() {
+ if (selectedIds.size === 0) {
+ showToast('请先选择记录', 'error');
+ return;
+ }
+ if (isActionLocked()) return;
+ // 检查所有选中记录的尺寸重量是否填写完整
+ const incompleteRecords = [];
+ for (const id of selectedIds) {
+ const r = allRecords.find(x => x.id === id);
+ if (r && (!r.weight || r.weight <= 0 || !r.length || r.length <= 0 || !r.width || r.width <= 0 || !r.height || r.height <= 0)) {
+ incompleteRecords.push(r.serial_label);
+ }
+ }
+ if (incompleteRecords.length > 0) {
+ showToast(`以下记录未填写完整箱子尺寸/重量：${incompleteRecords.join('、')}`, 'error');
+ return;
+ }
+ // 先验证二级密码
+ showSecondaryPasswordModal(() => {
+ confirmAction('批量确认完成', `确定要将已选择的 <strong>${selectedIds.size}</strong> 条订单标记为已完成吗？`, async () => {
+ lockAction();
+ try {
+ const result = await apiRequest('/api/packed/batch_complete', {
+ method: 'POST',
+ body: JSON.stringify({ ids: Array.from(selectedIds) })
+ });
+ showToast(result.message || '操作成功', 'success');
+ clearBatchSelection();
+ loadRecords();
+ } catch (e) {
+ showToast(e.message || '操作失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }, '标记订单已完成');
+ }
+
+ function batchEdit() {
+ if (selectedIds.size === 0) {
+ showToast('请先选择记录', 'error');
+ return;
+ }
+ openBatchEdit();
+ }
+
+ function resetFilters() {
+ document.getElementById('filter-customer').value = '';
+ document.getElementById('filter-batch').value = '';
+ document.getElementById('filter-nature').value = '';
+ document.getElementById('filter-cartoned').value = '';
+ document.getElementById('filter-status').value = '';
+ document.getElementById('filter-fullbox').value = '';
+ document.getElementById('filter-start').value = '';
+ document.getElementById('filter-end').value = '';
+ document.getElementById('cs-in-pkrec').value = '';
+ csClrPk();
+ loadRecords();
+ }
+
+ function openEdit(id) {
+ const r = allRecords.find(x => x.id === id);
+ if (!r) { showToast('记录不存在', 'error'); return; }
+
+ document.getElementById('edit-id').value = id;
+ document.getElementById('edit-customer-name').value = r.customer_name || '';
+ document.getElementById('edit-serial').value = r.serial_label + ((r.total_packages > 1) ? ` (共${r.total_packages})` : '');
+ document.getElementById('edit-trackings').value = (r.tracking_numbers || []).join(', ');
+ document.getElementById('edit-contents').value = r.contents_description || '';
+ document.getElementById('edit-weight').value = (r.weight > 0) ? r.weight : '';
+ document.getElementById('edit-length').value = (r.length > 0) ? r.length : '';
+ document.getElementById('edit-width').value = (r.width > 0) ? r.width : '';
+ document.getElementById('edit-height').value = (r.height > 0) ? r.height : '';
+ document.getElementById('edit-batch-id').value = r.batch_id || '';
+ document.getElementById('edit-nature').value = r.nature || '普';
+ document.getElementById('edit-fullbox').checked = !!r.is_full_box;
+
+ calcEditVol();
+ document.getElementById('edit-modal').classList.add('active');
+ // 渲染常用尺寸快捷按钮
+ SizePresets.renderButtons('packed-quick-sizes', 'edit-length', 'edit-width', 'edit-height', calcEditVol);
+ // 自动聚焦到实际重量输入框
+ setTimeout(() => { document.getElementById('edit-weight').focus(); document.getElementById('edit-weight').select(); }, 50);
+ }
+
+ function closeEditModal() {
+ document.getElementById('edit-modal').classList.remove('active');
+ }
+
+ // 编辑弹窗方向键导航 + Enter保存并跳到下一个
+ (function() {
+ const navOrder = ['edit-weight', 'edit-length', 'edit-width', 'edit-height'];
+ document.addEventListener('keydown', function(e) {
+ if (!document.getElementById('edit-modal').classList.contains('active')) return;
+ const active = document.activeElement;
+ if (!active || active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA') return;
+
+ // Enter键：保存并进入下一个包裹的编辑
+ if (e.key === 'Enter' && active.tagName === 'INPUT' && active.type === 'number') {
+ e.preventDefault();
+ saveEdit(true); // 保存后跳转到下一个
+ return;
+ }
+
+ const idx = navOrder.indexOf(active.id);
+ if (idx === -1) return;
+ let nextIdx = idx;
+ if (e.key === 'ArrowRight') { nextIdx = idx + 1; }
+ else if (e.key === 'ArrowLeft') { nextIdx = idx - 1; }
+ else if (e.key === 'ArrowDown') {
+ if (active.id === 'edit-weight') nextIdx = 1;
+ else nextIdx = (idx + 1) % navOrder.length;
+ }
+ else if (e.key === 'ArrowUp') {
+ if (active.id === 'edit-length' || active.id === 'edit-width' || active.id === 'edit-height') nextIdx = 0;
+ else nextIdx = (idx - 1 + navOrder.length) % navOrder.length;
+ }
+ if (nextIdx !== idx && nextIdx >= 0 && nextIdx < navOrder.length) {
+ e.preventDefault();
+ const next = document.getElementById(navOrder[nextIdx]);
+ if (next) { next.focus(); next.select(); }
+ }
+ });
+ })();
+
+ function calcEditVol() {
+ const l = parseFloat(document.getElementById('edit-length').value) || 0;
+ const w = parseFloat(document.getElementById('edit-width').value) || 0;
+ const h = parseFloat(document.getElementById('edit-height').value) || 0;
+ const wt = parseFloat(document.getElementById('edit-weight').value) || 0;
+
+ let vol = 0;
+ if (l && w && h) {
+ vol = (l * w * h) / 6000;
+ vol = Math.round(vol * 10) / 10;
+ vol = Math.ceil(vol * 2) / 2;
+ }
+ document.getElementById('edit-vol-weight').value = vol > 0 ? vol.toFixed(1) : '';
+
+ let chargeable = Math.max(vol, wt, 1.0);
+ chargeable = Math.ceil(chargeable * 2) / 2;
+ document.getElementById('edit-chargeable').value = chargeable.toFixed(1);
+ }
+
+ // ========== 包裹详情 ==========
+ function showDetail(id) {
+ const record = allRecords.find(r => r.id === id);
+ if (!record) {
+ showToast('记录不存在', 'error');
+ return;
+ }
+
+ const trackings = record.tracking_numbers || [];
+ const trackingsList = trackings.length > 0
+ ? trackings.map((t, i) => `
+ <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--bg-input); border-radius: 6px; margin-bottom: 8px;">
+ <span style="background: #1565c0; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px; min-width: 24px; text-align: center;">${i + 1}</span>
+ <span style="font-family: monospace; font-size: 14px; color: var(--text-primary); flex: 1; word-break: break-all;">${t}</span>
+ <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="copyTracking('${t}')">复制</button>
+ </div>
+ `).join('')
+ : '<div style="color: #64748b; text-align: center; padding: 20px;">暂无入库单号</div>';
+
+ const natureText = record.nature === '敏' ? '敏货' : '普货';
+ const natureColor = record.nature === '敏' ? '#dc2626' : '#1565c0';
+
+ document.getElementById('detail-content').innerHTML = `
+ <div style="margin-bottom: 15px;">
+ <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+ <div style="padding: 12px; background: linear-gradient(135deg, #1565c0, #0d47a1); color: white; border-radius: 8px; text-align: center;">
+ <div style="font-size: 11px; opacity: 0.9;">序号标签</div>
+ <div style="font-size: 20px; font-weight: bold; margin-top: 4px;">${record.serial_label}</div>
+ </div>
+ <div style="padding: 12px; background: ${natureColor}; color: white; border-radius: 8px; text-align: center;">
+ <div style="font-size: 11px; opacity: 0.9;">货物性质</div>
+ <div style="font-size: 20px; font-weight: bold; margin-top: 4px;">${natureText}</div>
+ </div>
+ </div>
+ </div>
+
+ <div style="margin-bottom: 15px;">
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+ <span style="font-weight: 600; color: var(--text-primary);"> 入库单号（共 ${trackings.length} 个）</span>
+ ${trackings.length > 1 ? `<button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="copyAllTrackings(${id})">复制全部</button>` : ''}
+ </div>
+ <div style="max-height: 300px; overflow-y: auto;">
+ ${trackingsList}
+ </div>
+ </div>
+
+ <div style="padding: 12px; background: rgba(217,119,6,0.1); border-radius: 8px; font-size: 13px; color: #d97706;">
+ <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+ <span>客户：</span>
+ <strong>${record.customer_name || '—'} ${record.customer_no || ''}</strong>
+ </div>
+ <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+ <span>重量/体积重：</span>
+ <strong>${record.weight || 0} kg / ${record.volume_weight || 0} kg</strong>
+ </div>
+ <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+ <span>尺寸：</span>
+ <strong>${(record.length > 0 && record.width > 0 && record.height > 0) ? `${record.length}×${record.width}×${record.height} cm` : '—'}</strong>
+ </div>
+ <div style="display: flex; justify-content: space-between;">
+ <span>批次：</span>
+ <strong>${record.batch_no || '未分配'}</strong>
+ </div>
+ ${record.customer_remark ? `
+ <div style="display: flex; justify-content: space-between; margin-top: 6px;">
+ <span>客户备注：</span>
+ <strong>${escapeHtml(record.customer_remark)}</strong>
+ </div>` : ''}
+ ${record.abnormal_remark ? `
+ <div style="display: flex; justify-content: space-between; margin-top: 6px;">
+ <span style="color:#ef4444;">异常备注：</span>
+ <strong style="color:#ef4444;">${escapeHtml(record.abnormal_remark)}</strong>
+ </div>` : ''}
+ </div>
+ `;
+
+ document.getElementById('detail-modal').classList.add('active');
+ }
+
+ function closeDetailModal() {
+ document.getElementById('detail-modal').classList.remove('active');
+ }
+
+ function copyTracking(text) {
+ navigator.clipboard.writeText(text).then(() => {
+ showToast('单号已复制', 'success');
+ }).catch(() => {
+ // fallback
+ const textarea = document.createElement('textarea');
+ textarea.value = text;
+ document.body.appendChild(textarea);
+ textarea.select();
+ document.execCommand('copy');
+ document.body.removeChild(textarea);
+ showToast('单号已复制', 'success');
+ });
+ }
+
+ function copyAllTrackings(id) {
+ const record = allRecords.find(r => r.id === id);
+ if (!record) return;
+ const text = (record.tracking_numbers || []).join('\n');
+ navigator.clipboard.writeText(text).then(() => {
+ showToast(`已复制 ${record.tracking_numbers.length} 个单号`, 'success');
+ }).catch(() => {
+ const textarea = document.createElement('textarea');
+ textarea.value = text;
+ document.body.appendChild(textarea);
+ textarea.select();
+ document.execCommand('copy');
+ document.body.removeChild(textarea);
+ showToast(`已复制 ${record.tracking_numbers.length} 个单号`, 'success');
+ });
+ }
+
+ async function saveEdit(skipToNext) {
+ const id = parseInt(document.getElementById('edit-id').value);
+ const batchId = document.getElementById('edit-batch-id').value;
+ const data = {
+ id: id,
+ contents_description: document.getElementById('edit-contents').value,
+ weight: parseFloat(document.getElementById('edit-weight').value) || 0,
+ length: parseFloat(document.getElementById('edit-length').value) || 0,
+ width: parseFloat(document.getElementById('edit-width').value) || 0,
+ height: parseFloat(document.getElementById('edit-height').value) || 0,
+ batch_id: batchId ? parseInt(batchId) : null,
+ nature: document.getElementById('edit-nature').value,
+ is_full_box: document.getElementById('edit-fullbox').checked
+ };
+
+ try {
+ const result = await apiRequest('/api/packed/records/update', {
+ method: 'POST',
+ body: JSON.stringify(data)
+ });
+ closeEditModal();
+
+ // 更新当前行
+ updateRowInPlace(id, data);
+ showToast('保存成功', 'success');
+
+ // Enter键保存后跳转到下一个未测量的包裹
+ if (skipToNext && allRecords.length > 0) {
+ const currentIdx = allRecords.findIndex(r => r.id === id);
+ // 查找下一个没有重量的记录
+ for (let i = currentIdx + 1; i < allRecords.length; i++) {
+ if (!allRecords[i].weight || allRecords[i].weight === 0) {
+ setTimeout(() => openEdit(allRecords[i].id), 100);
+ return;
+ }
+ }
+ showToast('已全部测量完成', 'info');
+ }
+ } catch (e) {
+ showToast(e.message || '保存失败', 'error');
+ }
+ }
+
+ function openBatchEdit() {
+ document.getElementById('batch-weight').value = '';
+ document.getElementById('batch-length').value = '';
+ document.getElementById('batch-width').value = '';
+ document.getElementById('batch-height').value = '';
+ document.getElementById('batch-contents').value = '';
+ document.getElementById('batch-edit-modal').classList.add('active');
+ }
+
+ function closeBatchEditModal() {
+ document.getElementById('batch-edit-modal').classList.remove('active');
+ }
+
+ async function saveBatchEdit() {
+ if (selectedIds.size === 0) {
+ showToast('请先选择记录', 'error');
+ return;
+ }
+
+ const data = {
+ weight: parseFloat(document.getElementById('batch-weight').value) || null,
+ length: parseFloat(document.getElementById('batch-length').value) || null,
+ width: parseFloat(document.getElementById('batch-width').value) || null,
+ height: parseFloat(document.getElementById('batch-height').value) || null,
+ contents_description: document.getElementById('batch-contents').value || null
+ };
+
+ let success = 0, failed = 0;
+ for (const id of selectedIds) {
+ try {
+ await apiRequest('/api/packed/records/update', {
+ method: 'POST',
+ body: JSON.stringify({ id, ...data })
+ });
+ success++;
+ } catch (e) {
+ failed++;
+ }
+ }
+
+ closeBatchEditModal();
+ // 批量编辑后留在当前视图，记住第一个编辑的 ID 用于滚动
+ lastEditId = selectedIds.values().next().value || null;
+ await loadRecords();
+ showToast(`完成：成功 ${success} 条${failed > 0 ? '，失败 ' + failed + ' 条' : ''}`, failed > 0 ? 'error' : 'success');
+ }
+
+ async function deleteRecord(id) {
+ confirmDelete('确定要删除该打包记录吗？', async () => {
+ if (isActionLocked()) return;
+ lockAction();
+ // 删除前记住附近的一条记录 ID，用于滚动定位
+ const idx = allRecords.findIndex(r => r.id === id);
+ const fallbackId = idx >= 0 && allRecords.length > 1
+ ? allRecords[Math.min(idx + 1, allRecords.length - 1)].id
+ : (allRecords.length > 1 ? allRecords[Math.max(idx - 1, 0)].id : null);
+ try {
+ await apiRequest(`/api/packed/records/delete/${id}`, { method: 'POST' });
+ lastEditId = fallbackId;
+ await loadRecords();
+ showToast('删除成功', 'success');
+ } catch (e) {
+ showToast(e.message || '删除失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }
+
+ async function rollbackRecord(id) {
+ if (isActionLocked()) return;
+ lockAction();
+ // 回退前记住附近记录 ID
+ const idx = allRecords.findIndex(r => r.id === id);
+ const fallbackId = allRecords.length > 1
+ ? allRecords[Math.max(idx - 1, 0)].id
+ : null;
+ try {
+ const result = await apiRequest(`/api/packed/records/rollback/${id}`, { method: 'POST' });
+ lastEditId = fallbackId;
+ await loadRecords();
+ showToast(result.message || '回退成功', 'success');
+ } catch (e) {
+ showToast(e.message || '回退失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ function printLabel(id) {
+ // 打印标签是即时操作，不需要锁定
+ window.open(`/print_packed_label/${id}`, `print_${id}`, 'width=420,height=500,toolbar=0,scrollbars=0,status=0');
+ }
+
+ function pdfLabel(id) {
+ const link = document.createElement('a');
+ link.href = `/pdf/packed_label/${id}`;
+ link.download = `packed_label_${id}.pdf`;
+ link.click();
+ showToast('正在下载标签PDF...', 'success');
+ }
+
+ // 状态徽章渲染
+ function getStatusBadge(status) {
+ const s = status || '待合箱';
+ const map = {
+ '待合箱': '<span class="badge" style="background: rgba(217,119,6,0.12); color: #d97706;"> 待合箱</span>',
+ '已合箱': '<span class="badge" style="background: rgba(99,102,241,0.12); color: #6366f1;"> 已合箱</span>',
+ '已发货': '<span class="badge" style="background: rgba(6,182,212,0.12); color: #06b6d4;"> 已发货</span>',
+ '已完成': '<span class="badge badge-success"> 已完成</span>'
+ };
+ return map[s] || `<span class="badge" style="background: var(--border); color: var(--text-secondary);">${s}</span>`;
+ }
+
+ async function completeRecord(id) {
+ if (isActionLocked()) return;
+ const record = allRecords.find(r => r.id === id);
+ if (!record) {
+ showToast('记录不存在', 'error');
+ return;
+ }
+ // 检查箱子尺寸重量是否填写完整
+ if (!record.weight || record.weight <= 0 || !record.length || record.length <= 0 || !record.width || record.width <= 0 || !record.height || record.height <= 0) {
+ showToast('请先填写完整的箱子尺寸（长/宽/高）和重量后再确认完成', 'error');
+ return;
+ }
+ // 先验证二级密码
+ showSecondaryPasswordModal(() => {
+ confirmAction('确认完成', `确定要将订单 "<strong>${record.serial_label}</strong>" 标记为已完成吗？`, async () => {
+ lockAction();
+ try {
+ const result = await apiRequest(`/api/packed/${id}/complete`, { method: 'POST' });
+ showToast(result.message || '操作成功', 'success');
+ loadRecords();
+ } catch (e) {
+ showToast(e.message || '操作失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }, '标记订单已完成');
+ }
+
+ async function shipRecord(id) {
+ // 已废弃：请使用 completeRecord
+ showToast('请使用合箱→发货→确认完成流程', 'warning');
+ }
+
+ function exportRecords() {
+ const customerId = document.getElementById('filter-customer').value;
+ const batchId = document.getElementById('filter-batch').value;
+ const nature = document.getElementById('filter-nature').value;
+ const startDate = document.getElementById('filter-start').value;
+ const endDate = document.getElementById('filter-end').value;
+
+ const params = new URLSearchParams();
+ if (customerId) params.set('customer_id', customerId);
+ if (batchId) params.set('batch_id', batchId);
+ if (nature) params.set('nature', nature);
+ if (startDate) params.set('start_date', startDate);
+ if (endDate) params.set('end_date', endDate);
+
+ window.open('/export/packed_records?' + params.toString(), '_blank');
+ }
+
+ // ===== 客户搜索组件 =====
+ var _csI3 = {};
+ function csSrPk() {
+ var inp = document.getElementById('cs-in-pkrec');
+ var dd = document.getElementById('cs-dd-pkrec');
+ var sel = document.getElementById('filter-customer');
+ // 如果已经选中客户，搜索框不展示下拉（chip 已显示客户名）
+ if (sel && sel.value) { dd.style.display = 'none'; return; }
+ var val = inp.value.trim().toLowerCase();
+ _csI3.pk = -1;
+ if (!val) { dd.style.display = 'none'; return; }
+ var hits = Array.from(sel.options).filter(function(o) {
+ if (!o.value) return false;
+ var n = (o.dataset.name||'').toLowerCase();
+ var b = (o.dataset.barcode||'').toLowerCase();
+ var no = (o.dataset.no||'').toLowerCase();
+ return val.length >= 1 && (n.includes(val) || b.includes(val) || no.includes(val));
+ });
+ dd.innerHTML = '';
+ if (!hits.length) { dd.style.display = 'none'; return; }
+ hits.slice(0, 12).forEach(function(o, i) {
+ var d = document.createElement('div');
+ d.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px;';
+ d.innerHTML = '<div style="font-weight:600">' + o.dataset.name + ' <span style="background:rgba(99,102,241,0.12);color:#818cf8;padding:1px 5px;border-radius:3px;font-size:10px;margin-left:4px;">' + o.dataset.barcode + '</span></div>';
+ d.onclick = (function(oid, oname) { return function() { csPkPk(oid, oname); }; })(o.value, o.dataset.name);
+ d.onmouseenter = function() { Array.from(dd.children).forEach(function(c){c.style.background='';}); d.style.background='rgba(6,182,212,0.08)'; _csI3.pk=i; };
+ dd.appendChild(d);
+ });
+ dd.style.display = 'block';
+ }
+ function csNvPk(e) {
+ var dd = document.getElementById('cs-dd-pkrec');
+ var its = Array.from(dd.children);
+ if (!its.length) return;
+ if (e.key === 'ArrowDown') { e.preventDefault(); _csI3.pk = Math.min((_csI3.pk||0)+1, its.length-1); its.forEach(function(c,i){c.style.background=i===_csI3.pk?'rgba(6,182,212,0.08)':'';}); its[_csI3.pk].scrollIntoView({block:'nearest'}); }
+ else if (e.key === 'ArrowUp') { e.preventDefault(); _csI3.pk = Math.max((_csI3.pk||0)-1,0); its.forEach(function(c,i){c.style.background=i===_csI3.pk?'rgba(6,182,212,0.08)':'';}); its[_csI3.pk].scrollIntoView({block:'nearest'}); }
+ else if (e.key === 'Enter') { e.preventDefault(); if (_csI3.pk>=0) its[_csI3.pk].click(); else if (its.length===1) its[0].click(); }
+ else if (e.key === 'Escape') { dd.style.display = 'none'; }
+ }
+ function csPkPk(custId, custName) {
+ var sel = document.getElementById('filter-customer');
+ var inp = document.getElementById('cs-in-pkrec');
+ var dd = document.getElementById('cs-dd-pkrec');
+ var selDiv = document.getElementById('cs-sel-pkrec');
+ var selLbl = document.getElementById('cs-sel-lbl-pkrec');
+ sel.value = custId;
+ selLbl.innerHTML = '<strong>' + custName + '</strong>';
+ selDiv.style.display = 'flex';
+ inp.value = custName;
+ dd.style.display = 'none';
+ loadRecords();
+ }
+ function csClrPk() {
+ var sel = document.getElementById('filter-customer');
+ var inp = document.getElementById('cs-in-pkrec');
+ var dd = document.getElementById('cs-dd-pkrec');
+ var selDiv = document.getElementById('cs-sel-pkrec');
+ sel.value = ''; selDiv.style.display = 'none'; inp.value = ''; dd.style.display = 'none';
+ loadRecords();
+ }
+ document.addEventListener('click', function(e) { if (!e.target.closest('.cs-wrapper')) { document.querySelectorAll('[id^="cs-dd-"]').forEach(function(d){d.style.display='none';}); } });
+
+ // ========== 快速扫描编辑 ==========
+ let quickScanMode = false;
+ let quickScanTimer = null;
+ const quickScanInput = document.getElementById('quick-scan-input');
+ const quickScanStatus = document.getElementById('quick-scan-status');
+
+ // 扫描输入处理：无需按Enter，自动识别扫描枪输入
+ quickScanInput.addEventListener('input', function() {
+ if (quickScanTimer) clearTimeout(quickScanTimer);
+ const val = this.value.trim();
+ if (!val) { quickScanStatus.textContent = '等待扫描...'; quickScanStatus.style.color = 'var(--text-muted)'; return; }
+ 
+ quickScanStatus.textContent = '识别中...';
+ quickScanStatus.style.color = '#d97706';
+ 
+ // 300ms 防抖，适合扫码枪输入速度
+ quickScanTimer = setTimeout(() => {
+ const barcode = quickScanInput.value.trim();
+ if (!barcode) return;
+ handleQuickScan(barcode);
+ }, 300);
+ });
+
+ async function handleQuickScan(barcode) {
+ const id = parseInt(barcode);
+ if (isNaN(id) || id <= 0) {
+ quickScanStatus.textContent = '无效条码: ' + barcode;
+ quickScanStatus.style.color = '#dc2626';
+ quickScanInput.value = '';
+ quickScanInput.focus();
+ return;
+ }
+
+ quickScanStatus.textContent = '查询中...';
+ quickScanStatus.style.color = '#d97706';
+
+ try {
+ const resp = await fetch('/api/packed/scan/' + id);
+ if (!resp.ok) {
+ throw new Error('包裹不存在');
+ }
+ const record = await resp.json();
+ 
+ // 进入快速编辑模式
+ quickScanMode = true;
+ quickScanStatus.textContent = ' 已找到: ' + record.customer_name + ' - ' + record.serial_label;
+ quickScanStatus.style.color = '#16a34a';
+ quickScanInput.value = '';
+ 
+ // 填充编辑弹窗并打开
+ openEditFromScan(record);
+ 
+ } catch (e) {
+ quickScanStatus.textContent = ' 未找到包裹 #' + id;
+ quickScanStatus.style.color = '#dc2626';
+ quickScanInput.value = '';
+ quickScanInput.focus();
+ }
+ }
+
+ function openEditFromScan(r) {
+ document.getElementById('edit-id').value = r.id;
+ document.getElementById('edit-customer-name').value = r.customer_name || '';
+ document.getElementById('edit-serial').value = r.serial_label + ((r.total_packages > 1) ? ' (共' + r.total_packages + ')' : '');
+ document.getElementById('edit-trackings').value = (r.tracking_numbers || []).join(', ');
+ document.getElementById('edit-contents').value = r.contents_description || '';
+ document.getElementById('edit-weight').value = (r.weight > 0) ? r.weight : '';
+ document.getElementById('edit-length').value = (r.length > 0) ? r.length : '';
+ document.getElementById('edit-width').value = (r.width > 0) ? r.width : '';
+ document.getElementById('edit-height').value = (r.height > 0) ? r.height : '';
+ document.getElementById('edit-batch-id').value = r.batch_id || '';
+ document.getElementById('edit-nature').value = r.nature || '普';
+ document.getElementById('edit-fullbox').checked = !!r.is_full_box;
+
+ calcEditVol();
+ document.getElementById('edit-modal').classList.add('active');
+ // 渲染常用尺寸快捷按钮
+ SizePresets.renderButtons('packed-quick-sizes', 'edit-length', 'edit-width', 'edit-height', calcEditVol);
+ // 自动聚焦到实际重量输入框
+ setTimeout(() => { document.getElementById('edit-weight').focus(); document.getElementById('edit-weight').select(); }, 50);
+ }
+
+ // 快速编辑模式下的保存：完成后返回扫描状态
+ const origSaveEdit = saveEdit;
+ saveEdit = async function() {
+ await origSaveEdit();
+ if (quickScanMode) {
+ quickScanMode = false;
+ quickScanStatus.textContent = ' 已保存，等待下一个扫描...';
+ quickScanStatus.style.color = '#16a34a';
+ setTimeout(() => {
+ quickScanInput.value = '';
+ quickScanInput.focus();
+ quickScanStatus.textContent = '等待扫描...';
+ quickScanStatus.style.color = 'var(--text-muted)';
+ }, 300);
+ }
+ };
+
+ // 快速编辑模式下关闭弹窗也返回扫描状态
+ const origCloseEditModal = closeEditModal;
+ closeEditModal = function() {
+ origCloseEditModal();
+ if (quickScanMode) {
+ quickScanMode = false;
+ quickScanStatus.textContent = '等待扫描...';
+ quickScanStatus.style.color = 'var(--text-muted)';
+ setTimeout(() => {
+ quickScanInput.focus();
+ }, 200);
+ }
+ };
+
+ // 初始化加载
+ document.addEventListener('DOMContentLoaded', function() {
+   loadRecords();
+   startDevicePolling();
+ });
+
+// 测量设备数据轮询（每1秒刷新一次）
+let _devicePollTimer = null;
+let _deviceHideTimer = null;
+let _lastDeviceData = null;
+let _lastDeviceTime = 0;
+const DEVICE_SHOW_MS = 10000; // 10秒后自动隐藏
+
+function startDevicePolling() {
+  if (_devicePollTimer) return;
+  pollDeviceLatest(); // 首次立即执行
+  _devicePollTimer = setInterval(pollDeviceLatest, 1000);
+}
+
+function clearDeviceShow() {
+  const bar = document.getElementById('device-latest-bar');
+  const text = document.getElementById('device-latest-text');
+  const detail = document.getElementById('device-latest-detail');
+  if (bar) {
+    bar.style.opacity = '0.5';
+    bar.style.background = 'linear-gradient(135deg, #e3f2fd, #bbdefb)';
+  }
+  if (text) text.textContent = '等待推送...';
+  if (detail) detail.textContent = '';
+}
+
+async function pollDeviceLatest() {
+  try {
+    const res = await fetch('/api/measure/latest');
+    if (!res.ok) return;
+    const json = await res.json();
+    const data = json.data;
+    const bar = document.getElementById('device-latest-bar');
+    const text = document.getElementById('device-latest-text');
+    const detail = document.getElementById('device-latest-detail');
+    if (!data) {
+      // 检查是否超过10秒无数据
+      if (Date.now() - _lastDeviceTime > DEVICE_SHOW_MS) {
+        clearDeviceShow();
+      }
+      return;
+    }
+
+    // 检查是否是新数据（不同包裹或不同时间）
+    const dataKey = (data.packed_id || '') + '_' + (data.weight || '') + '_' + (data.timestamp || '');
+    const isNewData = !_lastDeviceData || _lastDeviceData !== dataKey;
+
+    if (isNewData) {
+      _lastDeviceData = dataKey;
+      _lastDeviceTime = Date.now();
+      bar.style.opacity = '1';
+      bar.style.background = 'linear-gradient(135deg, #c8e6c9, #a5d6a7)'; // 绿色高亮表示新数据
+      text.textContent = (data.customer_name || '') + ' ' + (data.serial_label || '');
+      detail.textContent = data.weight + 'kg ' + data.length + 'x' + data.width + 'x' + data.height + 'cm';
+
+      // 清除旧的隐藏计时器
+      if (_deviceHideTimer) clearTimeout(_deviceHideTimer);
+      // 设置10秒后自动隐藏
+      _deviceHideTimer = setTimeout(() => {
+        clearDeviceShow();
+      }, DEVICE_SHOW_MS);
+    }
+  } catch (e) { /* ignore */ }
+}
+</script>
+{% endif %}
+
+{% if view == 'channel' %}
+<style>
+.ch-filter { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: flex-end; }
+.ch-filter label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+.ch-filter select, .ch-filter input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+.ch-stats { display: flex; gap: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.ch-stat { flex: 1; text-align: center; padding: 10px 4px; border-right: 1px solid #f1f5f9; }
+.ch-stat:last-child { border-right: none; }
+.ch-stat .num { display: block; font-size: 20px; font-weight: 700; color: #0d2b52; }
+.ch-stat .lbl { font-size: 12px; color: var(--muted); }
+.ch-table { width: 100%; border-collapse: collapse; background: #fff; }
+.ch-table th { background: #f8fafc; font-size: 12px; color: var(--muted); text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); }
+.ch-table td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.ch-table tr:hover { background: #f8fafc; }
+.ch-badge { padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.ch-air { background: #e0f2fe; color: #0284c7; }
+.ch-sea { background: #dbeafe; color: #1d4ed8; }
+.ch-other { background: #f3e8ff; color: #7e22ce; }
+.empty-state { text-align: center; padding: 40px 0; color: var(--muted); }
+</style>
+
+<div style="margin-bottom:12px;">
+<span style="font-size:13px; color:var(--muted);">客户选择空运/快递/小包等渠道发走的单号，已从入库明细中摘除</span>
+</div>
+
+<!-- 筛选 -->
+<form method="get" action="/packed_records" class="ch-filter">
+<input type="hidden" name="view" value="channel">
+<div>
+<label>渠道</label>
+<select name="channel" onchange="this.form.submit()">
+<option value="">全部渠道</option>
+<option value="空运" {{ 'selected' if f_channel == '空运' else '' }}>空运</option>
+<option value="快递" {{ 'selected' if f_channel == '快递' else '' }}>快递</option>
+<option value="小包" {{ 'selected' if f_channel == '小包' else '' }}>小包</option>
+</select>
+</div>
+<div>
+<label>客户</label>
+<select name="customer_id" onchange="this.form.submit()">
+<option value="">全部客户</option>
+{% for c in vip_customers %}
+<option value="{{ c.id }}" {{ 'selected' if f_customer == c.id else '' }}>{{ c.name }}</option>
+{% endfor %}
+</select>
+</div>
+<div>
+<label>开始日期</label>
+<input type="date" name="start_date" value="{{ f_start }}">
+</div>
+<div>
+<label>结束日期</label>
+<input type="date" name="end_date" value="{{ f_end }}">
+</div>
+<div>
+<label>单号搜索</label>
+<input type="text" name="tracking_number" value="{{ f_tracking }}" placeholder="输入单号片段" style="width:160px;">
+</div>
+<button type="submit" style="padding:6px 16px; border:1px solid #1565c0; background:#1565c0; color:#fff; border-radius:6px; font-size:13px; cursor:pointer;">查询</button>
+<a href="/packed_records?view=channel" style="font-size:13px; color:#dc2626; text-decoration:none; padding-bottom:6px;">重置</a>
+</form>
+
+<!-- 渠道汇总 -->
+<div class="ch-stats">
+<div class="ch-stat"><span class="num">{{ channel_records|length }}</span><span class="lbl">总计</span></div>
+<div class="ch-stat"><span class="num">{{ channel_stats.get('空运', 0) }}</span><span class="lbl">空运</span></div>
+<div class="ch-stat"><span class="num">{{ channel_stats.get('快递', 0) }}</span><span class="lbl">快递</span></div>
+<div class="ch-stat"><span class="num">{{ channel_stats.get('小包', 0) }}</span><span class="lbl">小包</span></div>
+</div>
+
+{% if channel_records %}
+<table class="ch-table">
+<thead>
+<tr>
+<th>客户</th>
+<th>扫描单号</th>
+<th>渠道</th>
+<th>内部单号</th>
+<th>发货时间</th>
+<th>入库时间</th>
+<th>备注</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+{% for r in channel_records %}
+<tr>
+<td><strong>{{ r.customer.name if r.customer else '无主' }}</strong></td>
+<td><code style="background:#f0f0f0; padding:2px 6px; border-radius:4px; font-size:12px;">{{ r.tracking_number }}</code></td>
+<td>
+{% if r.ship_channel == '空运' %}<span class="ch-badge ch-air">空运</span>
+{% elif r.ship_channel == '快递' %}<span class="ch-badge ch-sea">快递</span>
+{% else %}<span class="ch-badge ch-other">小包</span>{% endif %}
+</td>
+<td>{% if r.internal_tracking_no %}<code style="background:#eef2ff; padding:2px 6px; border-radius:4px; font-size:12px; color:#4338ca;">{{ r.internal_tracking_no }}</code>{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+<td>{{ r.shipped_at.strftime('%Y-%m-%d %H:%M') if r.shipped_at else '-' }}</td>
+<td>{{ r.entry_time.strftime('%Y-%m-%d') if r.entry_time else '-' }}</td>
+<td>
+{% if r.customer_remark %}<span style="color:#92400e; font-size:12px;">{{ r.customer_remark }}</span>{% else %}<span style="color:var(--muted); font-size:12px;">—</span>{% endif %}
+</td>
+<td>
+<button class="btn btn-warning btn-sm" onclick="unshipChannel({{ r.id }}, '{{ r.tracking_number }}')">撤销</button>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<div class="empty-state"><p>暂无渠道发货记录</p></div>
+{% endif %}
+
+<script>
+function unshipChannel(id, tracking) {
+    if (!confirm('确定撤销该单号「' + tracking + '」的渠道发货？\n\n撤销后恢复为「已入库」状态，回到入库明细。')) return;
+    apiRequest('/api/inbound/channel_unship/' + id, { method:'POST' }).then(function(r) {
+        showToast(r.message || '操作成功', 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+    }).catch(function(e) {
+        showToast(e.message || '操作失败', 'error');
+    });
+}
+</script>
+{% endif %}
+{% endblock %}

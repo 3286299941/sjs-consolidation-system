@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+ <span>地址库</span>
+ <div style="display:flex; gap:8px; align-items:center;">
+ <input type="text" id="ab-search" placeholder="搜索邮编或收货人..." onkeyup="if(event.key==='Enter')doSearchAB()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:200px;">
+ <button class="btn" onclick="doSearchAB()">搜索</button>
+ <button class="btn" onclick="showABModal()">添加地址</button>
+ </div>
+</div>
+
+<table>
+ <thead>
+ <tr>
+ <th>邮编</th>
+ <th>收货人(普)</th>
+ <th>电话(普)</th>
+ <th>地址(普)</th>
+ <th>收货人(敏)</th>
+ <th>电话(敏)</th>
+ <th>地址(敏)</th>
+ <th>城市</th>
+ <th>州</th>
+ <th>国家</th>
+ <th>操作</th>
+ </tr>
+ </thead>
+ <tbody id="ab-tbody"></tbody>
+</table>
+
+<div id="ab-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:9999; align-items:center; justify-content:center;">
+ <div style="background:var(--bg-card); border-radius:12px; padding:24px; max-width:780px; width:95%; max-height:90vh; overflow-y:auto;">
+ <div style="font-size:18px; font-weight:bold; margin-bottom:16px;" id="ab-title">添加地址</div>
+ <form id="ab-form" onsubmit="return false;">
+ <input type="hidden" name="id" value="">
+
+ <div class="form-group"><label>邮编 *</label><input type="text" name="zip_code" required placeholder="如 91755"></div>
+
+ <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+ <div style="background:#eff6ff; padding:12px; border-radius:8px;">
+ <div style="font-weight:bold; color:#1e40af; margin-bottom:8px;">📦 普货信息</div>
+ <div class="form-group"><label>收货人姓名</label><input type="text" name="puhuo_consignee" placeholder="普货收货人"></div>
+ <div class="form-group"><label>电话</label><input type="text" name="puhuo_phone" placeholder="电话"></div>
+ <div class="form-group"><label>地址</label><textarea name="puhuo_address" rows="2" placeholder="地址"></textarea></div>
+ </div>
+ <div style="background:#fff7ed; padding:12px; border-radius:8px;">
+ <div style="font-weight:bold; color:#c2410c; margin-bottom:8px;">⚠️ 敏货信息</div>
+ <div class="form-group"><label>收货人姓名</label><input type="text" name="minhuo_consignee" placeholder="敏货收货人"></div>
+ <div class="form-group"><label>电话</label><input type="text" name="minhuo_phone" placeholder="电话"></div>
+ <div class="form-group"><label>地址</label><textarea name="minhuo_address" rows="2" placeholder="地址"></textarea></div>
+ </div>
+ </div>
+
+ <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:10px;">
+ <div class="form-group"><label>城市</label><input type="text" name="city" placeholder="城市"></div>
+ <div class="form-group"><label>州</label><input type="text" name="state" placeholder="州/省份"></div>
+ <div class="form-group"><label>国家</label><input type="text" name="country" placeholder="如 US"></div>
+ </div>
+ <div class="form-group"><label>备注</label><input type="text" name="remark" placeholder="选填"></div>
+
+ <div style="margin-top:15px; text-align:right;">
+ <button type="button" class="btn btn-secondary" onclick="closeABModal()">取消</button>
+ <button type="button" class="btn" onclick="saveAB()">保存</button>
+ </div>
+ </form>
+ </div>
+</div>
+
+<script>
+var AB_DATA = {{ entries | tojson }};
+var AB_ALL = AB_DATA || [];
+
+function h(s) { return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function cell(v) { return '<td>' + h(v) + '</td>'; }
+
+function short(v, n) { return h((v||'').length > n ? (v||'').substring(0,n)+'...' : (v||'')); }
+
+function renderAB(data) {
+ var tbody = document.getElementById('ab-tbody');
+ if (!data.length) {
+ tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:30px;">暂无地址库记录</td></tr>';
+ return;
+ }
+ var html = '';
+ for (var i = 0; i < data.length; i++) {
+ var e = data[i];
+ html += '<tr>';
+ html += '<td><code>' + h(e.zip_code) + '</code></td>';
+ html += '<td><strong style="font-size:13px;">' + h(e.puhuo_consignee) + '</strong></td>';
+ html += '<td>' + h(e.puhuo_phone) + '</td>';
+ html += '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="' + h(e.puhuo_address) + '">' + short(e.puhuo_address, 15) + '</td>';
+ html += '<td><strong style="font-size:13px;color:#c2410c;">' + h(e.minhuo_consignee) + '</strong></td>';
+ html += '<td>' + h(e.minhuo_phone) + '</td>';
+ html += '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="' + h(e.minhuo_address) + '">' + short(e.minhuo_address, 15) + '</td>';
+ html += '<td>' + h(e.city) + '</td>';
+ html += '<td>' + h(e.state) + '</td>';
+ html += '<td>' + h(e.country) + '</td>';
+ html += '<td><button class="btn btn-secondary" onclick="editAB(' + e.id + ')" style="padding:4px 8px;font-size:12px;">编辑</button> ' +
+ '<button class="btn btn-danger" onclick="deleteAB(' + e.id + ')" style="padding:4px 8px;font-size:12px;">删除</button></td>';
+ html += '</tr>';
+ }
+ tbody.innerHTML = html;
+}
+
+function doSearchAB() {
+ var kw = (document.getElementById('ab-search').value || '').trim().toLowerCase();
+ if (!kw) { renderAB(AB_ALL); return; }
+ var filtered = [];
+ for (var i = 0; i < AB_ALL.length; i++) {
+ var e = AB_ALL[i];
+ var s = (e.zip_code||'') + ' ' + (e.puhuo_consignee||'') + ' ' + (e.minhuo_consignee||'');
+ if (s.toLowerCase().indexOf(kw) !== -1) filtered.push(e);
+ }
+ renderAB(filtered);
+}
+
+function showABModal(entry) {
+ var form = document.getElementById('ab-form');
+ var f = [
+ 'zip_code', 'puhuo_consignee', 'puhuo_phone', 'puhuo_address',
+ 'minhuo_consignee', 'minhuo_phone', 'minhuo_address',
+ 'city', 'state', 'country', 'remark'
+ ];
+ for (var i = 0; i < f.length; i++) {
+ form.elements[f[i]].value = entry ? (entry[f[i]]||'') : '';
+ }
+ form.elements['id'].value = entry ? entry.id : '';
+ document.getElementById('ab-title').textContent = entry ? '编辑地址' : '添加地址';
+ document.getElementById('ab-overlay').style.display = 'flex';
+}
+
+function closeABModal() { document.getElementById('ab-overlay').style.display = 'none'; }
+
+function editAB(id) {
+ for (var i = 0; i < AB_ALL.length; i++) {
+ if (AB_ALL[i].id === id) { showABModal(AB_ALL[i]); return; }
+ }
+}
+
+function saveAB() {
+ var form = document.getElementById('ab-form');
+ if (!form.checkValidity()) { form.reportValidity(); return; }
+ var data = {};
+ var fd = new FormData(form);
+ fd.forEach(function(v,k) { data[k] = v; });
+ var url = data.id ? '/api/address_book/update/' + data.id : '/api/address_book/add';
+ apiRequest(url, { method:'POST', body:JSON.stringify(data) }).then(function(r) {
+ closeABModal();
+ showToast(r.message, 'success');
+ reloadAB();
+ }).catch(function(e) {});
+}
+
+function deleteAB(id) {
+ if (!confirm('确定删除该地址？')) return;
+ apiRequest('/api/address_book/delete/' + id, { method:'POST' }).then(function(r) {
+ showToast(r.message, 'success');
+ reloadAB();
+ }).catch(function(e) {});
+}
+
+function reloadAB() {
+ apiRequest('/api/address_book/list').then(function(r) {
+ AB_ALL = r;
+ renderAB(AB_ALL);
+ }).catch(function(e) {});
+}
+
+renderAB(AB_ALL);
+
+document.getElementById('ab-overlay').addEventListener('click', function(e) {
+ if (e.target === this) closeABModal();
+});
+</script>
+
+{% endblock %}

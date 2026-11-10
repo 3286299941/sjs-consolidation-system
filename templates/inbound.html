@@ -1,0 +1,938 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+ <div class="card-title">入库扫描</div>
+
+ <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+ <!-- 左侧：扫描录入 -->
+ <div>
+ <h3 style="margin-bottom: 15px; color: var(--accent-hover);"> 扫描录入</h3>
+
+ <div class="form-group">
+ <label>选择客户 *</label>
+ <div class="cs-wrapper" id="cs-w-inbound" style="position: relative;">
+ <!-- 原生 select（隐藏，用于 onCustomerChange 兼容） -->
+ <select id="customer-select" style="display:none;" onchange="onCustomerChange()">
+ <option value="">-- 请选择客户 --</option>
+ {% for c in customers %}
+ <option value="{{ c.id }}" data-barcode="{{ c.barcode }}" data-name="{{ c.name }}" data-no="{{ c.customer_no }}" data-zip="{{ c.zip_code|default('') }}">{{ c.name }} - {{ c.barcode }}</option>
+ {% endfor %}
+ </select>
+
+ <!-- 已选客户标签 -->
+ <div id="cs-sel-inbound" style="display:none; margin-bottom:8px; padding:8px 12px; background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.2); border-radius:6px; font-size:13px; justify-content:space-between; align-items:center;">
+ <span id="cs-sel-label-inbound" style="color:#818cf8;"></span>
+ <button type="button" onclick="csClear('inbound')" style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.2); color:#dc2626; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:12px;">× 清除</button>
+ </div>
+
+ <!-- 搜索输入 -->
+ <div style="display:flex; gap:6px;">
+ <input type="text" id="cs-in-inbound"
+ placeholder=" 输入姓名/条码/编号搜索，或直接扫码"
+ autocomplete="off" autocorrect="off" spellcheck="false"
+ style="flex:1; padding:9px 12px; border:1px solid var(--border); border-radius:6px; font-size:14px;"
+ oninput="csDo('inbound')" onkeydown="csNav(event,'inbound')" onfocus="csFocus('inbound')">
+ <button type="button" id="cs-scan-inbound" onclick="csScan('inbound')"
+ style="padding:8px 12px; background: var(--accent); color: #fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap;" title="扫码模式"> 扫码</button>
+ <button class="camera-btn camera-btn-xs" onclick="openCameraScanner('cs-in-inbound', function(code) { csDo('inbound'); })" title="摄像头扫描"></button>
+ </div>
+
+ <!-- 结果下拉 -->
+ <div id="cs-dd-inbound" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:999; max-height:280px; overflow-y:auto; margin-top:4px;"></div>
+ </div>
+ </div>
+
+ <!-- 自动扫描 -->
+ <div class="form-group">
+ <label>扫描单号（回车自动添加）</label>
+ <input type="text" id="tracking-input" placeholder="扫描或输入快递单号后按回车" onkeydown="handleTrackingInput(event)">
+ </div>
+
+ <!-- 手动录入 -->
+ <div class="form-group">
+ <label>批量录入单号（每行一个）</label>
+ <textarea id="batch-tracking" rows="4" placeholder="SF<PROD_ADMIN_PWD_HASH>7890&#10;YTO9876543210&#10;ZTO<PROD_ADMIN_PWD_HASH>7890"></textarea>
+ <button class="btn" onclick="batchAdd()" style="margin-top: 8px;">批量添加</button>
+ </div>
+
+ <!-- 无主扫描 -->
+ <div class="form-group" style="border-top: 2px dashed var(--border); padding-top: 12px; margin-top: 8px;">
+ <label style="color: #f59e0b;">无主扫描（回车直接入库为无主单号）</label>
+ <input type="text" id="anonymous-input" placeholder="扫描或输入无主单号后按回车" onkeydown="handleAnonymousInput(event)" style="border-color: #f59e0b;">
+ <div style="margin-top: 4px; font-size: 12px; color: #f59e0b;">无主扫描无需选择客户，扫描后直接进入无主单号管理</div>
+ </div>
+
+ <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+ <div class="form-group" style="margin-bottom: 0;">
+ <label> 客户备注 <span style="font-weight: normal; color: var(--text-muted); font-size: 11px;">（客户要求）</span></label>
+ <input type="text" id="customer-remark" placeholder="如：加固包装、加急处理" style="width: 100%;">
+ </div>
+ <div class="form-group" style="margin-bottom: 0;">
+ <label> 异常备注 <span style="font-weight: normal; color: var(--text-muted); font-size: 11px;">（入库异常）</span></label>
+ <input type="text" id="abnormal-remark" placeholder="如：没找全、包裹破损" style="width: 100%;">
+ </div>
+ </div>
+
+ <!-- 直接入库模式：扫描后立即入库，无需点击完成 -->
+ <div style="margin-top: 15px; padding: 8px 12px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 6px; font-size: 12px; color: #047857;">
+ 扫描后自动入库，无需点击完成按钮
+ </div>
+ </div>
+
+ <!-- 右侧：已扫描列表 -->
+ <div>
+ <h3 style="margin-bottom: 15px; color: var(--accent-hover);"> 已扫描包裹</h3>
+ <div style="margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+ <div>
+ <strong>当前客户: </strong><span id="current-customer-name">请选择客户</span>
+ <span id="customer-barcode" style="margin-left: 15px; font-family: monospace; color: var(--text-secondary);"></span>
+ </div>
+ <button class="btn" onclick="printCustomerLabel()" style="padding: 4px 14px; font-size: 12px; display: none; background: linear-gradient(135deg, #1565c0, #0d47a1); color: #fff; border: none; border-radius: 6px; box-shadow: 0 2px 8px rgba(21, 101, 192, 0.3); font-weight: 600; letter-spacing: 0.5px;" id="print-label-btn">打印客户面单</button>
+ </div>
+ <div id="scanned-list-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+ <strong style="font-size: 14px;">已扫描包裹</strong>
+ <div id="batch-action-bar" style="display: none; gap: 8px;">
+ <button id="batch-delete-btn" class="btn btn-danger btn-xs" onclick="batchDeletePackages()" disabled style="padding: 4px 10px; font-size: 12px;"> 批量删除</button>
+ </div>
+ </div>
+ <div id="scanned-list" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px;">
+ <div class="empty-state" style="padding: 30px;">
+ 暂无已扫描的包裹
+ </div>
+ </div>
+
+ <!-- 仓库库位图 -->
+ <div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;">
+ <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+ <strong style="font-size: 14px; color: var(--accent-hover);">仓库库位</strong>
+ <span id="slot-status" style="font-size: 12px; color: var(--text-muted);">选择客户后显示货架分配</span>
+ </div>
+ <div id="shelf-map-inbound" style="max-height: 320px; overflow-y: auto;">
+ <div class="empty-state" style="padding: 20px; font-size: 13px;">选择客户后显示货架分配</div>
+ </div>
+ <!-- 多选操作栏 -->
+ <div id="slot-actions" style="margin-top: 6px; display: flex; align-items: center;">
+ <span style="font-size: 12px; color: var(--text-muted);">点击货位进行多选，再确认分配</span>
+ </div>
+ <!-- 货物标记 -->
+ <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center;">
+ <span style="font-size: 12px; color: var(--text-secondary);">货物标记:</span>
+ <button id="flag-box-btn" class="btn" onclick="toggleFlag('has_box')" style="padding: 3px 12px; font-size: 11px; border-radius: 4px; border: 1px solid var(--border); background: #f8fafc; color: #64748b; display: none; transition: all 0.15s;">箱子</button>
+ <button id="flag-bulk-btn" class="btn" onclick="toggleFlag('has_bulk')" style="padding: 3px 12px; font-size: 11px; border-radius: 4px; border: 1px solid var(--border); background: #f8fafc; color: #64748b; display: none; transition: all 0.15s;">大货</button>
+ <span id="flag-status" style="font-size: 11px; color: var(--text-muted); margin-left: 4px;"></span>
+ </div>
+ </div>
+ </div>
+ </div>
+</div>
+
+<script>
+ let currentCustomerId = null;
+ let currentCustomerBarcode = null;
+ let currentCustomerName = null;
+ let customerAddress = '';
+ let scannedPackages = [];
+
+ function handleAnonymousInput(event) {
+ if (event.key === 'Enter') {
+ const input = document.getElementById('anonymous-input');
+ const tracking = input.value.trim();
+
+ if (tracking) {
+ addAnonymousPackage(tracking);
+ input.value = '';
+ }
+ }
+ }
+
+ function onCustomerChange() {
+ const select = document.getElementById('customer-select');
+ const customerId = select.value;
+
+ if (customerId) {
+ const option = select.options[select.selectedIndex];
+ currentCustomerBarcode = option.dataset.barcode;
+ currentCustomerName = option.dataset.name;
+ currentCustomerId = parseInt(customerId);
+
+ document.getElementById('current-customer-name').textContent = currentCustomerName;
+ document.getElementById('customer-barcode').textContent = currentCustomerBarcode;
+
+ // 显示客户信息面板
+ 
+ 
+ 
+
+ // 显示打印按钮
+ document.getElementById('print-label-btn').style.display = '';
+
+ // 重置客户地址，确保加载新客户的货架
+ customerAddress = '';
+ selectedSlots.clear();
+
+ // 加载货架分配
+ loadShelfMap(customerId);
+
+ // 聚焦到扫描输入框
+ document.getElementById('tracking-input').focus();
+
+ // 清空列表（切换客户时）
+ scannedPackages = [];
+ renderScannedList();
+
+ // 清空备注
+ document.getElementById('customer-remark').value = '';
+ document.getElementById('abnormal-remark').value = '';
+ } else {
+ currentCustomerId = null;
+ currentCustomerBarcode = null;
+ currentCustomerName = null;
+ document.getElementById('current-customer-name').textContent = '请选择客户';
+ document.getElementById('customer-barcode').textContent = '';
+ 
+ document.getElementById('print-label-btn').style.display = 'none';
+ document.getElementById('shelf-map-inbound').innerHTML = '<div class="empty-state" style="padding: 20px; font-size: 13px;">选择客户后显示货架分配</div>';
+ document.getElementById('slot-status').textContent = '选择客户后显示货架分配';
+ document.getElementById('slot-actions').innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">点击货位进行多选，再确认分配</span>';
+ selectedSlots.clear();
+ updateFlagButtons();
+ customerAddress = '';
+ }
+ }
+
+ async function loadCustomerInfo(customerId) {
+ try {
+ const result = await apiRequest(`/api/customer/${customerId}`);
+ customerAddress = result.address || '';
+ setFlagBtnState('has_box', result.has_box || false);
+ setFlagBtnState('has_bulk', result.has_bulk || false);
+ } catch (e) { customerAddress = ''; }
+ }
+
+ function handleTrackingInput(event) {
+ if (event.key === 'Enter') {
+ const input = document.getElementById('tracking-input');
+ const tracking = input.value.trim();
+
+ if (tracking) {
+ addPackage(tracking);
+ input.value = '';
+ }
+ }
+ }
+
+ async function addPackage(tracking) {
+ if (!currentCustomerId) {
+ showToast('请先选择客户', 'error');
+ return;
+ }
+
+ // 检查是否已添加
+ if (scannedPackages.some(p => p.tracking === tracking)) {
+ showToast('该单号已添加', 'error');
+ return;
+ }
+
+ // 直接入库
+ try {
+ const payload = {
+ tracking_number: tracking,
+ customer_remark: document.getElementById('customer-remark').value.trim() || '',
+ abnormal_remark: document.getElementById('abnormal-remark').value.trim() || '',
+ customer_id: currentCustomerId
+ };
+
+ const result = await apiRequest('/api/inbound/add', {
+ method: 'POST',
+ body: JSON.stringify(payload)
+ });
+
+ if (result.success) {
+ scannedPackages.push({
+ tracking: tracking,
+ sequence_no: result.package.sequence_no || scannedPackages.length + 1,
+ status: '已入库'
+ });
+ renderScannedList();
+ showToast('已入库: ' + tracking, 'success');
+ // 播放提示音
+ playBeep();
+ } else {
+ showToast(result.message || '入库失败', 'error');
+ }
+ } catch (e) {
+ showToast('入库失败: ' + (e.message || '网络错误'), 'error');
+ }
+ }
+
+ async function addAnonymousPackage(tracking) {
+ // 无主扫描：直接入库为无主单号
+ try {
+ const payload = {
+ tracking_number: tracking,
+ customer_remark: '',
+ abnormal_remark: '',
+ is_anonymous: '1'
+ };
+
+ const result = await apiRequest('/api/inbound/add', {
+ method: 'POST',
+ body: JSON.stringify(payload)
+ });
+
+ if (result.success) {
+ showToast('无主单号已入库: ' + tracking, 'success');
+ playBeep();
+ } else {
+ showToast(result.message || '入库失败', 'error');
+ }
+ } catch (e) {
+ showToast('入库失败: ' + (e.message || '网络错误'), 'error');
+ }
+ }
+
+ async function batchAdd() {
+ if (!currentCustomerId) {
+ showToast('请先选择客户', 'error');
+ return;
+ }
+
+ const text = document.getElementById('batch-tracking').value;
+ const trackings = text.split('\n').map(t => t.trim()).filter(t => t);
+
+ if (trackings.length === 0) {
+ showToast('请输入快递单号', 'error');
+ return;
+ }
+
+ // 直接批量入库
+ try {
+ const payload = {
+ tracking_numbers: trackings,
+ customer_remark: document.getElementById('customer-remark').value.trim() || null,
+ abnormal_remark: document.getElementById('abnormal-remark').value.trim() || null,
+ customer_id: currentCustomerId
+ };
+
+ const result = await apiRequest('/api/inbound/batch', {
+ method: 'POST',
+ body: JSON.stringify(payload)
+ });
+
+ if (result.success) {
+ const created = result.data.created_count || 0;
+ const existing = result.data.existing_count || 0;
+ const skipped = trackings.length - created - existing;
+ // 添加到列表显示
+ let seqStart = scannedPackages.length;
+ trackings.forEach((t, i) => {
+ if (!scannedPackages.some(p => p.tracking === t)) {
+ scannedPackages.push({
+ tracking: t,
+ sequence_no: seqStart + i + 1,
+ status: '已入库'
+ });
+ }
+ });
+ renderScannedList();
+ document.getElementById('batch-tracking').value = '';
+ let msg = '成功入库 ' + created + ' 个包裹';
+ if (existing > 0) msg += '，' + existing + '个已存在';
+ if (skipped > 0) msg += '，' + skipped + '个跳过';
+ showToast(msg, 'success');
+ playBeep();
+ } else {
+ showToast(result.message || '批量入库失败', 'error');
+ }
+ } catch (e) {
+ showToast('批量入库失败: ' + (e.message || '网络错误'), 'error');
+ }
+ }
+
+ function renderScannedList() {
+ const container = document.getElementById('scanned-list');
+
+ if (scannedPackages.length === 0) {
+ container.innerHTML = '<div class="empty-state" style="padding: 30px;">暂无已扫描的包裹</div>';
+ // 隐藏批量操作栏
+ var bar = document.getElementById('batch-action-bar');
+ if (bar) bar.style.display = 'none';
+ return;
+ }
+
+ // 显示批量操作栏
+ var bar = document.getElementById('batch-action-bar');
+ if (bar) bar.style.display = 'flex';
+
+ let html = '<table style="width: 100%; font-size: 14px;">';
+ html += '<thead><tr><th style="width:36px;"><input type="checkbox" id="select-all-inbound" onclick="toggleSelectAll()" title="全选"></th><th>#</th><th>序号</th><th>快递单号</th><th>操作</th></tr></thead>';
+ html += '<tbody>';
+
+ scannedPackages.forEach((pkg, index) => {
+ html += `<tr>
+ <td><input type="checkbox" class="inbound-check" data-index="${index}" onchange="updateBatchDelBtn()"></td>
+ <td>${index + 1}</td>
+ <td>${pkg.sequence_no}</td>
+ <td><code style="background: var(--bg-input); padding: 2px 6px; border-radius: 4px; color: var(--text-primary);">${pkg.tracking}</code></td>
+ <td><button class="btn btn-danger btn-xs" onclick="removePackage(${index})">删除</button></td>
+ </tr>`;
+ });
+
+ html += '</tbody></table>';
+ container.innerHTML = html;
+ }
+
+ function toggleSelectAll() {
+ var checked = document.getElementById('select-all-inbound').checked;
+ document.querySelectorAll('.inbound-check').forEach(cb => cb.checked = checked);
+ updateBatchDelBtn();
+ }
+
+ function updateBatchDelBtn() {
+ var checked = document.querySelectorAll('.inbound-check:checked').length;
+ var btn = document.getElementById('batch-delete-btn');
+ if (btn) {
+ btn.disabled = checked === 0;
+ btn.textContent = ' 批量删除' + (checked > 0 ? ' (' + checked + ')' : '');
+ }
+ }
+
+ function batchDeletePackages() {
+ var checked = document.querySelectorAll('.inbound-check:checked');
+ if (checked.length === 0) {
+ showToast('请先勾选要删除的单号', 'error');
+ return;
+ }
+ var indices = Array.from(checked).map(cb => parseInt(cb.dataset.index)).sort((a,b) => b-a);
+ indices.forEach(function(i) { scannedPackages.splice(i, 1); });
+ // 重新编号
+ scannedPackages.forEach((p, i) => p.sequence_no = i + 1);
+ renderScannedList();
+ showToast('已删除 ' + indices.length + ' 个单号', 'info');
+ }
+
+ function removePackage(index) {
+ const pkg = scannedPackages[index];
+ scannedPackages.splice(index, 1);
+ // 重新编号
+ scannedPackages.forEach((p, i) => p.sequence_no = i + 1);
+ renderScannedList();
+ showToast('已移除 ' + pkg.tracking, 'info');
+ }
+
+ function updateFinishBtn() {
+ // 直接入库模式：不再需要完成按钮
+ }
+
+ async function finishInbound() {
+ // 直接入库模式：扫描后自动入库，无需点击完成
+ showToast('当前为直接入库模式，扫描后自动入库', 'info');
+ }
+
+ function playBeep() {
+ // 简单的提示音
+ try {
+ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+ const oscillator = audioCtx.createOscillator();
+ const gainNode = audioCtx.createGain();
+ oscillator.connect(gainNode);
+ gainNode.connect(audioCtx.destination);
+ oscillator.type = 'sine';
+ oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+ gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+ gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+ oscillator.start(audioCtx.currentTime);
+ oscillator.stop(audioCtx.currentTime + 0.1);
+ } catch (e) {}
+ }
+
+ function printCustomerLabel() {
+ if (!currentCustomerId) return;
+ window.open(`/print_customer/${currentCustomerId}`, '_blank', 'width=400,height=600');
+ }
+
+ async function toggleFlag(flag) {
+ if (!currentCustomerId) return;
+ if (flag === 'has_box') {
+ await toggleBoxFlag();
+ return;
+ }
+ // has_bulk: 纯标记切换
+ await toggleBulkOnly();
+ }
+
+ async function toggleBoxFlag() {
+ const btn = document.getElementById('flag-box-btn');
+ const isActive = btn.dataset.active === '1';
+ if (isActive) {
+ // 取消箱子标记（不恢复货位）
+ await toggleFlagApi('has_box');
+ } else {
+ // 激活箱子：先取消所有货位分配，再标记箱子
+ if (currentAssignedSlots.length > 0) {
+ // 取消所有已分配的货位
+ for (const sl of currentAssignedSlots) {
+ await fetch('/api/warehouse/unassign', {
+ method: 'POST',
+ headers: {'Content-Type': 'application/json'},
+ body: JSON.stringify({slot_label: sl, customer_id: currentCustomerId})
+ });
+ }
+ }
+ await toggleFlagApi('has_box');
+ selectedSlots.clear();
+ loadShelfMap(currentCustomerId);
+ }
+ }
+
+ async function toggleFlagApi(flag) {
+ const res = await fetch(`/api/customer/${currentCustomerId}/toggle_flag`, {
+ method: 'POST',
+ headers: {'Content-Type': 'application/json'},
+ body: JSON.stringify({flag: flag})
+ });
+ const json = await res.json();
+ if (json.success) {
+ const btnId = flag === 'has_box' ? 'flag-box-btn' : 'flag-bulk-btn';
+ const label = flag === 'has_box' ? '箱子' : '大货';
+ const btn = document.getElementById(btnId);
+ const isActive = btn.dataset.active === '1';
+ setFlagBtnState(flag, !isActive);
+ updateFlagBtn(btnId, flag, label);
+ showToast(json.message, 'info');
+ }
+ }
+
+ async function toggleBulkOnly() {
+ await toggleFlagApi('has_bulk');
+ }
+
+ function updateFlagButtons() {
+ updateFlagBtn('flag-box-btn', 'has_box', '箱子');
+ updateFlagBtn('flag-bulk-btn', 'has_bulk', '大货');
+ }
+
+ function updateFlagBtn(btnId, flag, label) {
+ const btn = document.getElementById(btnId);
+ if (!currentCustomerId) {
+ btn.style.display = 'none';
+ return;
+ }
+ btn.style.display = '';
+ const isActive = btn.dataset.active === '1';
+ if (isActive) {
+ btn.style.background = '#dbeafe';
+ btn.style.borderColor = '#3b82f6';
+ btn.style.color = '#1d4ed8';
+ btn.style.fontWeight = '600';
+ btn.textContent = label + ' ✓';
+ } else {
+ btn.style.background = '#f8fafc';
+ btn.style.borderColor = 'var(--border)';
+ btn.style.color = '#64748b';
+ btn.style.fontWeight = 'normal';
+ btn.textContent = label;
+ }
+ }
+
+ function setFlagBtnState(flag, active) {
+ const btnId = flag === 'has_box' ? 'flag-box-btn' : 'flag-bulk-btn';
+ const btn = document.getElementById(btnId);
+ btn.dataset.active = active ? '1' : '0';
+ updateFlagBtn(btnId, flag, flag === 'has_box' ? '箱子' : '大货');
+ }
+
+ // ===== 仓库货架库位图 =====
+ let shelfSlotsData = [];
+ let currentAssignedSlots = [];
+ let selectedSlots = new Set();
+ let currentMatchedShelves = [];
+
+ async function loadShelfMap(customerId) {
+ const container = document.getElementById('shelf-map-inbound');
+ const statusEl = document.getElementById('slot-status');
+ statusEl.textContent = '加载中...';
+ try {
+ // 始终重新获取客户地址，防止切换客户后仍用旧地址
+ await loadCustomerInfo(customerId);
+ const res = await fetch('/api/warehouse/slots');
+ const json = await res.json();
+ if (!json.success) throw new Error(json.message);
+ shelfSlotsData = json.data.slots || [];
+
+ // 获取当前客户已分配的货位
+ const assignedRes = await fetch(`/api/warehouse/customer_slots?customer_id=${customerId}`);
+ const assignedJson = await assignedRes.json();
+ currentAssignedSlots = (assignedJson.success ? assignedJson.data.slots : []) || [];
+
+ // 根据客户地址筛选货架
+ const matchedShelfCodes = matchShelvesByAddress(customerAddress);
+ currentMatchedShelves = matchedShelfCodes;
+ renderShelfMap(matchedShelfCodes);
+ if (matchedShelfCodes.length === 1 && matchedShelfCodes[0] === '备用I') {
+ statusEl.textContent = customerAddress ? `${customerAddress.substring(0, 4)}货架已满 / 无对应货架，已切换备用货架` : '无地址信息，使用备用货架';
+ } else {
+ statusEl.textContent = `已分配: ${currentAssignedSlots.join(', ') || '无'}`;
+ }
+ } catch (e) {
+ container.innerHTML = '<div style="padding: 20px; color: var(--danger); font-size: 13px;">加载货架数据失败</div>';
+ statusEl.textContent = '加载失败';
+ }
+ }
+
+ // 根据客户地址匹配货架
+ function matchShelvesByAddress(address) {
+ if (!address) return ['备用I'];
+ 
+ // 提取所有可能的地址关键词
+ const allShelves = {};
+ shelfSlotsData.forEach(s => {
+ if (!allShelves[s.shelf_code]) {
+ allShelves[s.shelf_code] = { address_label: s.address_label, slots: [] };
+ }
+ allShelves[s.shelf_code].slots.push(s);
+ });
+ 
+ // 备用货架标识
+ const backupShelf = '备用I';
+ 
+ // 按地址匹配货架
+ const matched = [];
+ const addr = address.toLowerCase();
+ 
+ for (const [shelfCode, info] of Object.entries(allShelves)) {
+ if (shelfCode === backupShelf) continue; // 跳过备用，单独处理
+ const label = (info.address_label || '').toLowerCase();
+ // 检查客户地址是否包含货架的地址标签，或货架标签包含客户地址关键词
+ const addrParts = address.split(/[、,， 　]+/).filter(p => p);
+ let isMatch = false;
+ if (label) {
+ // 双向匹配：客户地址包含地址标签，或地址标签包含客户地址中的关键词
+ isMatch = addr.includes(label);
+ if (!isMatch) {
+ isMatch = addrParts.some(p => label.includes(p) || p.includes(label));
+ }
+ }
+ if (!isMatch && shelfCode.length >= 2) {
+ // 也检查 shelfc_code 前缀（如 "蒙市A" -> "蒙市"）
+ const codePrefix = shelfCode.replace(/[A-Za-z]$/, '');
+ if (addr.includes(codePrefix.toLowerCase())) isMatch = true;
+ }
+ if (isMatch) matched.push(shelfCode);
+ }
+ 
+ // 检查匹配的货架是否全满
+ const hasSpace = matched.some(sc => {
+ const shelfInfo = allShelves[sc];
+ const totalSlots = shelfInfo.slots.length;
+ const occupiedSlots = shelfInfo.slots.filter(s => s.customer_id).length;
+ return occupiedSlots < totalSlots;
+ });
+ 
+ // 检查是否有匹配的货架
+ if (matched.length === 0 || !hasSpace) {
+ // 无匹配或全满，降级到备用I
+ return [backupShelf];
+ }
+ 
+ // 有匹配且有空间，不显示备用货架
+ return matched;
+ }
+
+ function renderShelfMap(matchedShelfCodes) {
+ const container = document.getElementById('shelf-map-inbound');
+ const statusEl = document.getElementById('slot-status');
+ if (!shelfSlotsData.length) {
+ container.innerHTML = '<div class="empty-state" style="padding: 20px; font-size: 13px;">暂无货架数据</div>';
+ return;
+ }
+
+ // 筛选只显示匹配的货架
+ const targetCodes = matchedShelfCodes || [];
+ const filtered = shelfSlotsData.filter(s => targetCodes.includes(s.shelf_code));
+ 
+ if (!filtered.length) {
+ container.innerHTML = '<div class="empty-state" style="padding: 20px; font-size: 13px;">该地址暂无可用货架</div>';
+ statusEl.textContent = '该地址暂无可用货架';
+ return;
+ }
+
+ // 按货架分组
+ const byShelf = {};
+ filtered.forEach(s => {
+ if (!byShelf[s.shelf_code]) byShelf[s.shelf_code] = {};
+ if (!byShelf[s.shelf_code][s.floor]) byShelf[s.shelf_code][s.floor] = [];
+ byShelf[s.shelf_code][s.floor].push(s);
+ });
+
+ let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">';
+ Object.keys(byShelf).sort().forEach(shelf => {
+ const floors = byShelf[shelf];
+ const isBackup = shelf === '备用I';
+ const headerBg = isBackup ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, #059669, #10b981)';
+ const headerTitle = isBackup ? `${shelf}架（备用）` : `${shelf}架`;
+ html += `<div style="border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">`;
+ html += `<div style="background: ${headerBg}; color: #fff; padding: 6px 10px; font-size: 12px; font-weight: 700;">${headerTitle}</div>`;
+ Object.keys(floors).sort((a,b)=>a-b).forEach(floor => {
+ html += `<div style="padding: 4px 6px; border-bottom: 1px solid var(--border);">`;
+ html += `<div style="font-size: 10px; color: var(--text-secondary); font-weight: 600; margin-bottom: 3px;">${floor}层</div>`;
+ html += `<div style="display: flex; gap: 3px; flex-wrap: wrap;">`;
+ floors[floor].forEach(slot => {
+ const isAssigned = currentAssignedSlots.includes(slot.slot_label);
+ const isSelected = selectedSlots.has(slot.slot_label);
+ const hasCustomer = slot.customer_id && slot.customer_id !== currentCustomerId;
+ let bg = '#f8fafc';
+ let border = '#d1d5db';
+ let color = '#64748b';
+ let cursor = 'pointer';
+ if (isAssigned) {
+ bg = '#dcfce7'; border = '#22c55e'; color = '#166534';
+ } else if (isSelected) {
+ bg = '#e0f2fe'; border = '#0284c7'; color = '#0369a1';
+ } else if (hasCustomer) {
+ bg = '#fee2e2'; border = '#fca5a5'; color = '#7f1d1d'; cursor = 'not-allowed';
+ }
+ html += `<div class="zone-cell-mini" onclick="${hasCustomer ? '' : `toggleSlotSelect('${slot.slot_label}')`}" 
+ style="background: ${bg}; border: 1px solid ${border}; color: ${color}; 
+ border-radius: 3px; padding: 2px 6px; font-size: 10px; font-weight: 600; 
+ cursor: ${cursor}; white-space: nowrap; flex: 1; text-align: center; 
+ min-width: 30px; transition: all 0.15s;"
+ onmouseenter="this.style.opacity='0.8'" onmouseleave="this.style.opacity='1'"
+ data-slot="${slot.slot_label}">${slot.zone}</div>`;
+ });
+ html += '</div></div>';
+ });
+ html += '</div>';
+ });
+ html += '</div>';
+ container.innerHTML = html;
+ }
+
+ // 添加多选汇总和操作栏
+ function renderSlotActions() {
+ const slotActionsEl = document.getElementById('slot-actions');
+ if (!slotActionsEl) return;
+ const count = selectedSlots.size;
+ if (count > 0) {
+ slotActionsEl.innerHTML = `
+ <span style="font-size: 12px; color: var(--accent-hover); font-weight: 600;">已选 ${count} 个货位</span>
+ <button class="btn" onclick="confirmSlotAssign()" style="padding: 4px 12px; font-size: 12px; background: #0284c7; color: #fff; border: none; border-radius: 4px; margin-left: 8px;">确认分配</button>
+ <button class="btn" onclick="clearSlotSelection()" style="padding: 4px 12px; font-size: 12px; background: #e2e8f0; color: #64748b; border: none; border-radius: 4px; margin-left: 4px;">取消选择</button>
+ `;
+ } else {
+ slotActionsEl.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">点击货位进行多选，再确认分配</span>';
+ }
+ }
+
+ function toggleSlotSelect(slotLabel) {
+ if (!currentCustomerId) return;
+ // 如果已分配给当前客户，点击取消分配
+ if (currentAssignedSlots.includes(slotLabel)) {
+ unassignSlot(slotLabel);
+ return;
+ }
+ // 选择货位时取消箱子标记
+ const boxBtn = document.getElementById('flag-box-btn');
+ if (boxBtn.dataset.active === '1') {
+ toggleFlagApi('has_box');
+ }
+ if (selectedSlots.has(slotLabel)) {
+ selectedSlots.delete(slotLabel);
+ } else {
+ selectedSlots.add(slotLabel);
+ }
+ renderShelfMap(currentMatchedShelves);
+ renderSlotActions();
+ }
+
+ async function unassignSlot(slotLabel) {
+ try {
+ const res = await fetch('/api/warehouse/unassign', {
+ method: 'POST',
+ headers: {'Content-Type': 'application/json'},
+ body: JSON.stringify({slot_label: slotLabel, customer_id: currentCustomerId})
+ });
+ const json = await res.json();
+ if (json.success) {
+ showToast('已取消分配', 'success');
+ loadShelfMap(currentCustomerId);
+ } else {
+ showToast(json.message || '取消失败', 'error');
+ }
+ } catch (e) {
+ showToast('操作失败', 'error');
+ }
+ }
+
+ function clearSlotSelection() {
+ selectedSlots.clear();
+ loadShelfMap(currentCustomerId);
+ }
+
+ async function confirmSlotAssign() {
+ if (!currentCustomerId || selectedSlots.size === 0) {
+ showToast('请先选择货位', 'warning');
+ return;
+ }
+ // 确认分配货位时取消箱子标记
+ const boxBtn = document.getElementById('flag-box-btn');
+ if (boxBtn.dataset.active === '1') {
+ await toggleFlagApi('has_box');
+ }
+ const slots = Array.from(selectedSlots);
+ try {
+ const res = await fetch('/api/warehouse/assign', {
+ method: 'POST',
+ headers: {'Content-Type': 'application/json'},
+ body: JSON.stringify({customer_id: currentCustomerId, slot_labels: slots})
+ });
+ const json = await res.json();
+ if (json.success) {
+ showToast(`已分配 ${slots.length} 个货位`, 'success');
+ selectedSlots.clear();
+ loadShelfMap(currentCustomerId);
+ } else {
+ showToast(json.message || '分配失败', 'error');
+ }
+ } catch (e) {
+ showToast('操作失败: ' + e.message, 'error');
+ }
+ }
+
+ function toggleSlotAssign(slotLabel) {
+ // 旧版单点操作，保留兼容
+ if (!currentCustomerId) return;
+ const isAssigned = currentAssignedSlots.includes(slotLabel);
+ if (isAssigned) {
+ // Cancel assignment
+ fetch('/api/warehouse/unassign', {
+ method: 'POST',
+ headers: {'Content-Type': 'application/json'},
+ body: JSON.stringify({slot_label: slotLabel, customer_id: currentCustomerId})
+ }).then(r => r.json()).then(j => {
+ if (j.success) { showToast('已取消分配', 'success'); loadShelfMap(currentCustomerId); }
+ else showToast(j.message || '取消失败', 'error');
+ }).catch(e => showToast('操作失败', 'error'));
+ } else {
+ selectedSlots.add(slotLabel);
+ confirmSlotAssign();
+ }
+ }
+
+ // ===== 客户搜索组件（扫码 + 模糊匹配） =====
+ var _csIdx = {};
+ function csScan(id) {
+ var inp = document.getElementById('cs-in-' + id);
+ var btn = document.getElementById('cs-scan-' + id);
+ if (inp.dataset.sm === '1') {
+ inp.dataset.sm = '0';
+ inp.placeholder = ' 输入姓名/条码/编号搜索，或直接扫码';
+ btn.textContent = ' 扫码';
+ btn.style.background = '#06b6d4';
+ } else {
+ inp.dataset.sm = '1';
+ inp.placeholder = ' 扫码模式：直接扫描或输入条码';
+ btn.textContent = '退出扫码';
+ btn.style.background = '#f87171';
+ inp.focus();
+ }
+ }
+ function csDo(id) {
+ var inp = document.getElementById('cs-in-' + id);
+ var dd = document.getElementById('cs-dd-' + id);
+ var val = inp.value.trim().toLowerCase();
+ var sm = inp.dataset.sm === '1';
+ _csIdx[id] = -1;
+ if (!val) { dd.style.display = 'none'; return; }
+ var sel = document.getElementById('customer-select');
+ var opts = Array.from(sel.options);
+ var hits = opts.filter(function(o) {
+ if (!o.value) return false;
+ var n = (o.dataset.name || '').toLowerCase();
+ var b = (o.dataset.barcode || '').toLowerCase();
+ var no = (o.dataset.no || '').toLowerCase();
+ var v = val;
+ if (sm) return b.includes(v);
+ // 精确匹配或模糊匹配（汉字单字也支持，≥2 仅对字母数字做限制）
+ var minLen = /[\u4e00-\u9fff]/.test(v) ? 1 : 2;
+ return v.length >= minLen && (n.includes(v) || b.includes(v) || no.includes(v));
+ });
+ dd.innerHTML = '';
+ if (!hits.length) { dd.style.display = 'none'; return; }
+ hits.slice(0, 15).forEach(function(o, i) {
+ var div = document.createElement('div');
+ div.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(148,163,184,0.12);font-size:13px;';
+ div.innerHTML = '<div style="font-weight:600">' + o.dataset.name + ' <span style="background:rgba(99,102,241,0.12);color:#818cf8;padding:1px 6px;border-radius:3px;font-size:11px;margin-left:6px;">' + o.dataset.barcode + '</span></div><div style="font-size:11px;color:#64748b;margin-top:2px">' + (o.dataset.no ? '编号:' + o.dataset.no : '') + (o.dataset.zip ? ' | 邮编:' + o.dataset.zip : '') + '</div>';
+ div.onclick = (function(oid, oname, obarcode) { return function() { csPick(id, oid, oname, obarcode); }; })(o.value, o.dataset.name, o.dataset.barcode);
+ div.onmouseenter = function() { Array.from(dd.children).forEach(function(c) { c.style.background = ''; }); div.style.background = 'rgba(6,182,212,0.1)'; _csIdx[id] = i; };
+ dd.appendChild(div);
+ });
+ dd.style.display = 'block';
+ }
+ function csNav(e, id) {
+ var dd = document.getElementById('cs-dd-' + id);
+ var items = Array.from(dd.children);
+ if (!items.length) return;
+ if (e.key === 'ArrowDown') { e.preventDefault(); _csIdx[id] = Math.min((_csIdx[id]||0)+1, items.length-1); items.forEach(function(c,i){c.style.background=i===_csIdx[id]?'rgba(6,182,212,0.1)':'';}); items[_csIdx[id]].scrollIntoView({block:'nearest'}); }
+ else if (e.key === 'ArrowUp') { e.preventDefault(); _csIdx[id] = Math.max((_csIdx[id]||0)-1, 0); items.forEach(function(c,i){c.style.background=i===_csIdx[id]?'rgba(6,182,212,0.1)':'';}); items[_csIdx[id]].scrollIntoView({block:'nearest'}); }
+ else if (e.key === 'Enter') { e.preventDefault(); if (_csIdx[id]>=0) items[_csIdx[id]].click(); else if (items.length===1) items[0].click(); }
+ else if (e.key === 'Escape') { dd.style.display = 'none'; }
+ }
+ function csPick(id, custId, custName, custBarcode) {
+ var sel = document.getElementById('customer-select');
+ var inp = document.getElementById('cs-in-' + id);
+ var dd = document.getElementById('cs-dd-' + id);
+ var selDiv = document.getElementById('cs-sel-' + id);
+ var selLabel = document.getElementById('cs-sel-label-' + id);
+ sel.value = custId; sel.dispatchEvent(new Event('change'));
+ selLabel.innerHTML = '<strong>' + custName + '</strong>' + (custBarcode ? ' <span style="font-size:11px;color:#94a3b8">(' + custBarcode + ')</span>' : '');
+ selDiv.style.display = 'flex';
+ inp.value = custBarcode || custName;
+ dd.style.display = 'none';
+ }
+ function csClear(id) {
+ var sel = document.getElementById('customer-select');
+ var inp = document.getElementById('cs-in-' + id);
+ var dd = document.getElementById('cs-dd-' + id);
+ var selDiv = document.getElementById('cs-sel-' + id);
+ sel.value = ''; sel.dispatchEvent(new Event('change'));
+ selDiv.style.display = 'none'; inp.value = ''; inp.focus(); dd.style.display = 'none';
+ }
+ function csFocus(id) { var inp = document.getElementById('cs-in-' + id); if (inp.value.trim()) csDo(id); }
+ document.addEventListener('click', function(e) { if (!e.target.closest('.cs-wrapper')) { document.querySelectorAll('[id^="cs-dd-"]').forEach(function(d){d.style.display='none';}); } });
+
+ // ===== 装箱功能 =====
+ async function markAsBoxed() {
+ const customerId = currentCustomerId || selectedCustomerId;
+ if (!customerId) {
+ showToast('请先选择一个客户', 'warning');
+ return;
+ }
+ if (!confirm('确认将该客户的所有待入库包裹标记为已装箱？')) return;
+ try {
+ const result = await apiRequest('/api/warehouse/mark_boxed', {
+ method: 'POST',
+ headers: {'Content-Type': 'application/json'},
+ body: JSON.stringify({ customer_id: customerId })
+ });
+ if (result.success) {
+ showToast(result.message || '装箱成功', 'success');
+ setTimeout(() => window.location.reload(), 600);
+ } else {
+ showToast(result.message || '装箱失败', 'error');
+ }
+ } catch (e) {
+ showToast('网络错误', 'error');
+ }
+ }
+
+ document.addEventListener('DOMContentLoaded', function() {
+ var sel = document.getElementById('customer-select');
+ if (sel && sel.options.length === 2) {
+ sel.selectedIndex = 1;
+ onCustomerChange();
+ }
+ });
+</script>
+{% endblock %}

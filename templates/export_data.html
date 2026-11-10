@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+ <h1> 数据导出</h1>
+ <p style="color: var(--text-secondary); margin-bottom: 20px;">选择批次后，可导出4种格式的报表文件</p>
+</div>
+
+<!-- 批次选择 -->
+<div style="margin-bottom: 30px; padding: 20px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border);">
+ <div style="display: flex; align-items: center; gap: 12px;">
+ <label style="font-weight: 600; font-size: 15px; white-space: nowrap;"> 选择批次：</label>
+ <select id="batch-select" style="padding: 10px 16px; border: 1px solid var(--border); border-radius: 8px; min-width: 200px; font-size: 14px;">
+ <option value="">-- 请选择批次 --</option>
+ {% for batch in batches %}
+ <option value="{{ batch.id }}">
+ {{ batch.batch_no }}
+ {% if batch.zip_code %}（{{ batch.zip_code }}）{% endif %}
+ — {{ batch.batch_type }}
+ </option>
+ {% endfor %}
+ </select>
+ </div>
+ <div id="batch-info" style="margin-top: 12px; color: var(--text-muted); font-size: 13px; display: none;">
+ <span id="batch-name-display"></span>
+ </div>
+</div>
+
+<!-- 导出卡片 -->
+<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px;">
+
+ <!-- 发货清单 -->
+ <div class="card" style="padding: 24px; opacity: 0.5; transition: opacity 0.2s;" id="card-shipping-list">
+ <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+ <span style="font-size: 32px;"></span>
+ <div>
+ <h3 style="margin: 0; font-size: 16px;">发货清单</h3>
+ <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 13px;">详细包裹明细表</p>
+ </div>
+ </div>
+ <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; line-height: 1.6;">
+ 包含所有包裹的日期、客户、快递单号、邮编、备注、敏货信息、品名、重量尺寸等15项信息。按客户分组，普货/敏货自动分类。
+ </p>
+ <button class="btn" onclick="exportFile('shipping_list')" id="btn-shipping-list"
+ style="width: 100%; background: var(--accent); color: white; padding: 10px;" disabled>
+ 导出发货清单
+ </button>
+ </div>
+
+ <!-- 出货信息表 -->
+ <div class="card" style="padding: 24px; opacity: 0.5; transition: opacity 0.2s;" id="card-shipping-info">
+ <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+ <span style="font-size: 32px;"></span>
+ <div>
+ <h3 style="margin: 0; font-size: 16px;">出货信息表</h3>
+ <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 13px;">箱子装箱明细表</p>
+ </div>
+ </div>
+ <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; line-height: 1.6;">
+ 按箱子列出每个箱子的类型、所装货主、重量及尺寸。需先完成合箱操作才能导出。
+ </p>
+ <button class="btn" onclick="exportFile('shipping_info')" id="btn-shipping-info"
+ style="width: 100%; background: var(--accent); color: white; padding: 10px;" disabled>
+ 导出出货信息表
+ </button>
+ </div>
+
+ <!-- 装货清单 -->
+ <div class="card" style="padding: 24px; opacity: 0.5; transition: opacity 0.2s;" id="card-loading-list">
+ <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+ <span style="font-size: 32px;"></span>
+ <div>
+ <h3 style="margin: 0; font-size: 16px;">装货清单</h3>
+ <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 13px;">简化版货物汇总表</p>
+ </div>
+ </div>
+ <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; line-height: 1.6;">
+ 仅包含客户名称、货物性质、品名三列信息。简化格式便于报关和装货核对。
+ </p>
+ <button class="btn" onclick="exportFile('loading_list')" id="btn-loading-list"
+ style="width: 100%; background: var(--accent); color: white; padding: 10px;" disabled>
+ 导出装货清单
+ </button>
+ </div>
+
+ <!-- 计费表 -->
+ <div class="card" style="padding: 24px; opacity: 0.5; transition: opacity 0.2s;" id="card-billing-table">
+ <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+ <span style="font-size: 32px;"></span>
+ <div>
+ <h3 style="margin: 0; font-size: 16px;">计费表</h3>
+ <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 13px;">运费计费明细表</p>
+ </div>
+ </div>
+ <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; line-height: 1.6;">
+ 包含客户、快递单号、收货地、货物性质、实际重量、尺寸、材积重及计费重。自动计算材积重（L&times;W&times;H/6000）和计费重。
+ </p>
+ <button class="btn" onclick="exportFile('billing_table')" id="btn-billing-table"
+ style="width: 100%; background: var(--accent); color: white; padding: 10px;" disabled>
+ 导出计费表
+ </button>
+ </div>
+
+</div>
+
+<script>
+const batchSelect = document.getElementById('batch-select');
+const cards = [
+ { type: 'shipping_list', card: 'card-shipping-list', btn: 'btn-shipping-list' },
+ { type: 'shipping_info', card: 'card-shipping-info', btn: 'btn-shipping-info' },
+ { type: 'loading_list', card: 'card-loading-list', btn: 'btn-loading-list' },
+ { type: 'billing_table', card: 'card-billing-table', btn: 'btn-billing-table' },
+];
+
+batchSelect.addEventListener('change', function() {
+ const batchId = this.value;
+ const info = document.getElementById('batch-info');
+ const nameDisplay = document.getElementById('batch-name-display');
+
+ if (batchId) {
+ const selectedOption = this.options[this.selectedIndex];
+ nameDisplay.textContent = ' 已选择：' + selectedOption.text.trim();
+ info.style.display = 'block';
+
+ // 启用所有卡片和按钮
+ cards.forEach(c => {
+ document.getElementById(c.card).style.opacity = '1';
+ document.getElementById(c.btn).disabled = false;
+ });
+ } else {
+ info.style.display = 'none';
+ cards.forEach(c => {
+ document.getElementById(c.card).style.opacity = '0.5';
+ document.getElementById(c.btn).disabled = true;
+ });
+ }
+});
+
+function exportFile(type) {
+ const batchId = batchSelect.value;
+ if (!batchId) {
+ alert('请先选择批次');
+ return;
+ }
+ window.location.href = `/export/${type}?batch_id=${batchId}`;
+}
+</script>
+{% endblock %}

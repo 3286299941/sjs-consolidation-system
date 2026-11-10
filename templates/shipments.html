@@ -1,0 +1,1198 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+ <div class="card-title">
+ 待打包确认
+ <div style="float: right; display: flex; gap: 10px; align-items: center;">
+ <span id="record-count" style="font-size: 13px; color: var(--text-muted); font-weight: normal;"></span>
+ </div>
+ </div>
+
+ <p style="color: var(--text-secondary); margin-bottom: 20px;">
+ 确认客户本周发货后，在此页面将包裹标记为待打包。<br>
+ <span style="color: var(--warning); font-size: 13px;">
+ 提示：支持批量选择和操作，可使用复选框一次性确认多个客户。
+ </span>
+ </p>
+
+ <!-- 邮编筛选（常驻） -->
+ <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+ <span style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">筛选邮编：</span>
+ <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+ <a href="/shipments"
+ class="zip-chip {% if not selected_zip %}active{% endif %}"
+ style="text-decoration: none;">
+ 全部
+ <span class="chip-count">{{ total_count }}</span>
+ </a>
+ {% for z in zip_codes %}
+ <a href="/shipments?zip_code={{ z }}"
+ class="zip-chip {% if selected_zip == z %}active{% endif %}"
+ style="text-decoration: none;">
+ {{ z }}
+ <span class="chip-count">{{ zip_code_counts[z] }}</span>
+ </a>
+ {% endfor %}
+ </div>
+ {% if selected_zip %}
+ <span style="font-size: 12px; color: var(--accent-hover);">
+ 已筛选邮编：{{ selected_zip }}
+ </span>
+ {% endif %}
+ </div>
+
+ <!-- 客户检索栏 -->
+  <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+    <div style="position: relative; flex: 1; max-width: 420px;">
+      <input type="text" id="customer-search" placeholder="搜索客户姓名 / 条码 / 编号 / 地址..."
+             style="padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 14px;"
+             autocomplete="off" oninput="window._doShipmentSearch()" onkeydown="window._shipmentSearchKey(event)">
+      <div id="search-dropdown" style="display:none; position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-height: 320px; overflow-y: auto; z-index: 999;"></div>
+    </div>
+    <span id="search-result" style="font-size: 13px; color: var(--text-muted); white-space: nowrap;"></span>
+  </div>
+
+
+ <!-- 批量操作栏 -->
+ <div id="batch-actions" style="margin-bottom: 15px; padding: 12px 15px; background: #1565c0; border-radius: 8px; color: white;">
+ <div id="batch-actions-content" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+ <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+ <span>已选择 <strong id="selected-count">0</strong> 个客户</span>
+ <div style="display: flex; align-items: center; gap: 6px;">
+ <label style="font-size: 13px; opacity: 0.9;">归入批次：</label>
+ <select id="assign-batch-select" style="padding: 5px 8px; border-radius: 4px; border: 2px solid rgba(255,255,255,0.5); font-size: 13px; color: #1a1a2e; background: #fff; min-width: 160px;">
+ <option value="">-- 选择批次 --</option>
+ <option value="none">不指定批次</option>
+ {% for b in batches %}
+ <option value="{{ b.id }}">{{ b.batch_no }}（{{ b.batch_type }}）{% if b.zip_code %} - {{ b.zip_code }}{% endif %}</option>
+ {% endfor %}
+ </select>
+ <!-- v20260709-1035 -->
+ <button class="btn" onclick="batchAssignBatch()" style="padding: 5px 14px; background: #0d47a1; color: #fff; font-size: 13px; border: 1px solid #fff;" id="btn-assign-batch">
+ 确认归入
+ </button>
+ </div>
+</div>
+ <div style="display: flex; gap: 10px;">
+ <button class="btn" onclick="batchConfirm()" style="padding: 8px 20px; background: #fff; color: #1565c0; font-weight: 600; border: 2px solid #fff;">
+ 批量确认待打包
+ </button>
+ <button class="btn" onclick="batchCancel()" style="padding: 8px 20px; background: #0d47a1; color: #fff; border: 1px solid #fff;">
+ 批量取消
+ </button>
+ <button class="btn" onclick="clearSelection()" style="padding: 8px 20px; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.5);">
+ 清空选择
+ </button>
+ </div>
+ </div>
+ <div id="batch-actions-hint" style="text-align: center; padding: 8px; font-size: 14px; opacity: 0.9;">
+ 请在下方表格中勾选客户，以进行批量归入批次操作
+ </div>
+ </div>
+
+ {% if customers %}
+ <div style="overflow-x: auto;">
+ <table>
+ <thead>
+ <tr>
+ <th style="width: 50px;">
+ <input type="checkbox" id="select-all" onclick="toggleSelectAll(this)" onchange="toggleSelectAll(this)">
+ </th>
+ <th>序号</th>
+ <th>客户姓名</th>
+ <th>收货地址</th>
+ <th>邮编</th>
+ <th>批次号</th>
+ <th>已入库件数</th>
+ <th>备注</th>
+ <th>操作</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for customer in customers %}
+ <tr id="row-{{ customer.id }}" class="{% if customer.id in confirmed %}row-confirmed{% elif customer_batch_map.get(customer.id) %}row-batched{% else %}row-none{% endif %}" data-remark="{{ customer.remark or '' }}">
+ <td>
+ <input type="checkbox" class="row-checkbox{% if customer.is_vip %} vip-customer{% endif %}" value="{{ customer.id }}"
+ {% if customer.id in confirmed %}checked{% endif %}
+ onchange="document.getElementById('selected-count').textContent = document.querySelectorAll('.row-checkbox:checked').length; updateBatchSelection();"
+ onclick="document.getElementById('selected-count').textContent = document.querySelectorAll('.row-checkbox:checked').length; updateBatchSelection();">
+ </td>
+ <td>{{ loop.index }}</td>
+ <td>
+ <strong>{{ customer.name }}</strong>
+ {% if customer.is_vip %}<span style="display:inline-block;padding:1px 6px;background:#4527a0;color:#fff;border-radius:3px;font-size:10px;font-weight:600;margin-left:4px;vertical-align:middle;">VIP</span>{% endif %}
+ <div style="font-size: 11px; color: var(--text-muted);">{{ customer.customer_no }}</div>
+ </td>
+ <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ customer.address }}">{{ customer.address }}</td>
+ <td>{{ customer.zip_code or '—' }}</td>
+ <td>
+ {% set batch_no = customer_batch_map.get(customer.id) %}
+ {% set zip_batches = batches_by_zip.get(customer.zip_code, []) %}
+ <div style="position:relative; display:inline-block;" data-customer-id="{{ customer.id }}" data-zip="{{ customer.zip_code or '' }}">
+ <div class="batch-pill" onclick="window._toggleBatchDropdown(this)" style="cursor:pointer; position:relative; z-index:50; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; display:inline-flex; align-items:center; gap:4px; {% if batch_no %}background: rgba(99,102,241,0.1); color: #6366f1; border:1px solid rgba(99,102,241,0.3);{% else %}background: var(--bg-input); color: var(--text-muted); border:1px dashed var(--border-light);{% endif %}">
+ {% if batch_no %}{{ batch_no }}{% else %}<span>— 选择批次 —</span>{% endif %}
+ <span style="font-size:10px; opacity:0.6;">▼</span>
+ </div>
+ <div class="batch-dropdown" style="display:none; position:absolute; top:100%; left:0; margin-top:4px; background:#fff; border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,0.15); min-width:180px; max-height:240px; overflow-y:auto; z-index:200;">
+ <div onclick="selectBatchForCustomer({{ customer.id }}, 0, '', event)" style="padding:8px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid #f1f5f9; color: var(--text-muted);">
+ — 不指定批次 —
+ </div>
+ {% if zip_batches %}
+ {% for zb in zip_batches %}
+ <div onclick="selectBatchForCustomer({{ customer.id }}, {{ zb.id }}, '{{ zb.batch_no|e }}', event)" style="padding:8px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid #f1f5f9;">
+ {{ zb.batch_no }}<span style="color:var(--text-muted); font-size:11px;"> ({{ zb.batch_type }})</span>
+ </div>
+ {% endfor %}
+ {% else %}
+ <div style="padding:10px 12px; color:var(--text-muted); font-size:12px;">该邮编暂无可用批次</div>
+ {% endif %}
+ </div>
+ </div>
+ </td>
+ <td>
+ {% set pending_count = namespace(value=0) %}
+ {% for pkg in customer.incoming_packages %}
+ {% if pkg.status in ('已入库', '待打包') %}
+ {% set pending_count.value = pending_count.value + 1 %}
+ {% endif %}
+ {% endfor %}
+ <span class="badge badge-danger">{{ pending_count.value }} 件</span>
+ </td>
+ <td style="max-width: 180px;" class="remark-cell" data-customer-id="{{ customer.id }}">
+ {% if customer_batch_map.get(customer.id) %}
+ <!-- 有批次：客户备注（可编辑） -->
+ <div class="customer-remark-display" style="display: flex; align-items: center; gap: 4px; cursor: pointer;" 
+ onclick="editCustomerRemark(this, {{ customer.id }})" 
+ title="点击编辑客户备注">
+ {% if customer.remark %}
+ <span class="remark-text" style="font-size: 12px; color: #7c3aed; background: rgba(124,58,237,0.1); padding: 2px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;"> {{ customer.remark }}</span>
+ {% else %}
+ <span class="remark-text" style="font-size: 12px; color: var(--text-muted); font-style: italic;">点击添加备注…</span>
+ {% endif %}
+ <span style="font-size: 10px; color: var(--text-muted); opacity: 0.5;"></span>
+ </div>
+ <!-- 编辑区（默认隐藏） -->
+ <div class="customer-remark-edit" style="display: none; flex-direction: column; gap: 4px;">
+ <textarea class="remark-textarea" rows="2" style="width: 100%; padding: 4px 6px; border: 1px solid var(--accent); border-radius: 4px; font-size: 12px; resize: vertical; background: var(--bg-card); color: var(--text);" 
+ placeholder="输入客户备注…">{{ customer.remark or '' }}</textarea>
+ <div style="display: flex; gap: 4px;">
+ <button class="btn" style="padding: 2px 8px; font-size: 11px; background: var(--accent); color: #fff; border-radius: 3px;" 
+ onclick="saveCustomerRemark({{ customer.id }}, this)">保存</button>
+ <button class="btn" style="padding: 2px 8px; font-size: 11px; background: var(--bg-input); color: var(--text); border-radius: 3px;" 
+ onclick="cancelEditRemark(this)">取消</button>
+ </div>
+ </div>
+ {% else %}
+ <!-- 无批次：客户备注只读（备注随批次走，未指定批次时内容已被清空，不可编辑） -->
+ {% if customer.remark %}
+ <span class="remark-text" style="font-size: 12px; color: #7c3aed; background: rgba(124,58,237,0.1); padding: 2px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;" title="指定批次后可编辑备注">{{ customer.remark }}</span>
+ {% endif %}
+ {% endif %}
+<!-- 包裹备注（只读） -->
+{% set remarks = ship_customer_remarks.get(customer.id, []) %}
+{% set abnormals = ship_customer_abnormals.get(customer.id, []) %}
+{% for r in remarks %}
+<span style="font-size: 12px; color: #d97706; background: rgba(245,158,11,0.1); padding: 1px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ r }}"> {{ r }}</span>
+{% endfor %}
+{% for r in abnormals %}
+<span style="font-size: 12px; color: #ef4444; background: rgba(239,68,68,0.1); padding: 1px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ r }}"> {{ r }}</span>
+{% endfor %}
+{% if not customer.remark and not remarks and not abnormals %}
+<span style="color: var(--text-muted); font-size: 12px;">—</span>
+{% endif %}
+ </td>
+ <td id="actions-{{ customer.id }}">
+ {% if customer.id in confirmed %}
+ <button class="btn btn-secondary" onclick="cancelConfirm({{ customer.id }}, '{{ customer.name }}')" style="padding: 6px 12px; font-size: 13px;">取消确认</button>
+ <button class="btn" onclick="startPack({{ customer.id }})" style="padding: 6px 12px; font-size: 13px;"> 开始打包</button>
+ {% else %}
+ {% set customer_batch = customer_batch_map.get(customer.id) %}
+ {% if customer_batch %}
+ <button class="btn" onclick="confirmShipment({{ customer.id }}, '{{ customer.name }}')" style="padding: 6px 12px; font-size: 13px;"> 确认待打包</button>
+ {% elif customer.is_vip %}
+ <button class="btn" onclick="vipSoloShipment({{ customer.id }}, '{{ customer.name }}')" style="padding: 6px 12px; font-size: 13px; background: #7c3aed; color: #fff; border: 1px solid #7c3aed;">不指定批次单独发货</button>
+ {% else %}
+ <span style="font-size: 12px; color: #d97706; padding: 6px 8px; background: rgba(245,158,11,0.1); border-radius: 4px;">请先选择批次</span>
+ {% endif %}
+ {% endif %}
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+
+ <!-- 统计信息 -->
+ <div style="margin-top: 15px; padding: 12px 15px; background: rgba(6,182,212,0.06); border-radius: 8px; display: flex; gap: 30px; font-size: 13px;">
+ <span>客户总数: <strong id="stat-total">{{ customers|length }}</strong></span>
+ <span>已确认: <strong id="stat-confirmed" style="color: var(--success);">{{ confirmed|length }}</strong></span>
+ <span>待确认: <strong id="stat-pending" style="color: var(--warning);">{{ customers|length - confirmed|length }}</strong></span>
+ </div>
+
+ {% else %}
+ <div class="empty-state">
+ <div style="font-size: 48px; margin-bottom: 15px;"></div>
+ <p>暂无已入库客户</p>
+ <p style="font-size: 13px; color: var(--text-muted); margin-top: 10px;">入库扫描后，客户的包裹将显示在这里</p>
+ <div style="margin-top: 20px; display: flex; gap: 15px; justify-content: center;">
+ <a href="/inbound" class="btn" style="background: var(--accent); color: #fff; text-decoration: none;">
+ 去入库扫描
+ </a>
+ <a href="/packing" class="btn btn-secondary" style="text-decoration: none;">
+ 查看打包操作
+ </a>
+ </div>
+ </div>
+ {% endif %}
+</div>
+
+<!-- 打包详情弹窗 -->
+<div class="modal" id="packed-detail-modal">
+ <div class="modal-content" style="max-width: 650px;">
+ <div class="modal-title">
+ 打包详情
+ <span id="detail-customer-name" style="font-weight: normal; font-size: 14px; color: var(--text-secondary);"></span>
+ </div>
+ <div id="packed-detail-content" style="padding: 15px;">
+ 加载中...
+ </div>
+ <div class="modal-footer">
+ <button class="btn btn-secondary" onclick="closePackedDetail()">关闭</button>
+ </div>
+ </div>
+</div>
+
+<style>
+ .row-confirmed {
+ background: rgba(16,185,129,0.10) !important;
+ }
+ .row-confirmed:hover {
+ background: rgba(16,185,129,0.18) !important;
+ }
+ .row-batched {
+ background: rgba(245,158,11,0.08) !important;
+ }
+ .row-batched:hover {
+ background: rgba(245,158,11,0.15) !important;
+ }
+ tr:hover .row-checkbox {
+ cursor: pointer;
+ }
+ /* 状态过滤标签页样式 */
+ .filter-tab {
+ display: inline-flex;
+ align-items: center;
+ gap: 6px;
+ padding: 8px 16px;
+ border-radius: 6px;
+ text-decoration: none;
+ color: var(--text-muted);
+ font-size: 13px;
+ font-weight: 500;
+ transition: all 0.2s ease;
+ }
+ .filter-tab:hover {
+ background: rgba(6, 182, 212, 0.08);
+ color: var(--accent-hover);
+ }
+ .filter-tab.active {
+ background: var(--accent);
+ color: #fff;
+ box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+ }
+ .tab-count {
+ background: var(--border-light);
+ padding: 2px 8px;
+ border-radius: 10px;
+ font-size: 11px;
+ }
+ .filter-tab:not(.active) .tab-count {
+ background: var(--border);
+ }
+ /* 邮编芯片样式 */
+ .zip-chip, .batch-chip {
+ display: inline-flex;
+ align-items: center;
+ gap: 6px;
+ padding: 6px 14px;
+ border-radius: 20px;
+ font-size: 13px;
+ font-weight: 500;
+ color: var(--text-muted);
+ background: var(--bg-input);
+ border: 1.5px solid var(--border);
+ transition: all 0.2s ease;
+ }
+ .zip-chip:hover, .batch-chip:hover {
+ border-color: var(--accent);
+ color: var(--accent-hover);
+ background: rgba(21, 101, 192, 0.06);
+ }
+ .zip-chip.active, .batch-chip.active {
+ background: var(--accent);
+ color: #fff;
+ border-color: var(--accent);
+ box-shadow: 0 2px 8px rgba(21, 101, 192, 0.3);
+ }
+ .chip-count {
+ background: rgba(255,255,255,0.2);
+ padding: 1px 7px;
+ border-radius: 10px;
+ font-size: 11px;
+ min-width: 18px;
+ text-align: center;
+ }
+ .batch-chip.active .chip-count {
+ background: rgba(255,255,255,0.3);
+ }
+</style>
+
+<script>
+// 覆盖：确保使用正确的 apiRequest（不缓存 base.html 旧版本的兼容）
+window.apiRequest = async function(url, options) {
+ options = options || {};
+ try {
+ const headers = {};
+ if (options.body) headers['Content-Type'] = 'application/json';
+ Object.assign(headers, options.headers || {});
+ const res = await fetch(url, {
+ headers: headers, body: options.body, method: options.method || 'GET'
+ });
+ const text = await res.text();
+ let data;
+ try { data = JSON.parse(text); }
+ catch(e) {
+ if (text.trim().startsWith('<')) throw new Error('会话已过期，请重新登录后重试');
+ throw new Error('服务器错误: ' + text.substring(0,200));
+ }
+ if (data.success === false || !res.ok) throw new Error(data.message || '操作失败');
+ return data;
+ } catch(e) { alert(e.message); throw e; }
+};
+
+ let selectedCustomerIds = new Set();
+ // 当前页面筛选的批次ID（暂未使用，保留兼容）
+ const _pageBatchId = null;
+ // 客户→批次映射（用于前端判断确认按钮是否可用）
+ const customerBatchMap = {
+ {% for cid, bno in customer_batch_map.items() %}
+ {{ cid }}: "{{ bno }}",
+ {% endfor %}
+ };
+
+// 初始化已确认的客户
+{% for cid in confirmed %}
+selectedCustomerIds.add({{ cid }});
+{% endfor %}
+
+// 页面加载时更新批量选择状态（处理已预勾选的客户）
+window.addEventListener('load', function() {
+updateBatchSelection();
+});
+
+// 客户数据数组（供搜索下拉使用）
+const _customerData = [
+  {% for c in customers %}
+  {id: {{ c.id }}, name: {{ c.name|tojson }}, no: {{ c.customer_no|tojson }}, barcode: {{ c.barcode|tojson }}, addr: {{ (c.address or '')|tojson }}, zip: {{ (c.zip_code or '')|tojson }} },
+  {% endfor %}
+];
+
+ // 筛选无批次客户
+
+ // 筛选无批次客户
+ function filterNoBatch() {
+ document.querySelectorAll('.batch-chip').forEach(c => c.classList.remove('active'));
+ document.querySelector('a[onclick="filterNoBatch()"]').classList.add('active');
+ document.getElementById('customer-search').value = '';
+ document.getElementById('search-result').textContent = '';
+ const rows = document.querySelectorAll('tbody tr');
+ rows.forEach(row => {
+ if (!row.id || !row.id.startsWith('row-')) return;
+ const customerId = parseInt(row.id.replace('row-', ''));
+ const hasBatch = customerBatchMap[customerId];
+ row.style.display = hasBatch ? 'none' : '';
+ });
+ }
+
+// 更新批量选择状态
+function updateBatchSelection() {
+selectedCustomerIds = new Set();
+let hasVip = false;
+document.querySelectorAll('.row-checkbox:checked').forEach(cb => {
+selectedCustomerIds.add(parseInt(cb.value));
+if (cb.classList.contains('vip-customer')) hasVip = true;
+});
+
+const batchActionsContent = document.getElementById('batch-actions-content');
+const batchActionsHint = document.getElementById('batch-actions-hint');
+const selectedCount = document.getElementById('selected-count');
+
+if (selectedCustomerIds.size > 0) {
+if (batchActionsContent) batchActionsContent.style.display = 'flex';
+if (batchActionsHint) batchActionsHint.style.display = 'none';
+if (selectedCount) selectedCount.textContent = selectedCustomerIds.size;
+} else {
+if (batchActionsContent) batchActionsContent.style.display = 'none';
+if (batchActionsHint) batchActionsHint.style.display = 'block';
+if (selectedCount) selectedCount.textContent = '0';
+if (vipBtn) vipBtn.style.display = 'none';
+}
+}
+
+ // 全选/取消全选
+ function toggleSelectAll(cb) {
+ const el = cb || document.getElementById('select-all');
+ if (!el) return;
+ const checked = el.checked;
+ document.querySelectorAll('.row-checkbox').forEach(c => {
+ c.checked = checked;
+ });
+ if (typeof updateBatchSelection === 'function') updateBatchSelection();
+ }
+
+ // 清空选择
+ function clearSelection() {
+ document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+ document.getElementById('select-all').checked = false;
+ updateBatchSelection();
+ }
+
+// 批次下拉（挂载到 window 保证全局可调用）
+window._toggleBatchDropdown = function(pill) {
+ var wrapper = pill.parentElement;
+ if (!wrapper) return;
+ var dropdown = wrapper.querySelector('.batch-dropdown');
+ if (!dropdown) return;
+ if (dropdown.style.display === 'block') {
+ dropdown.style.display = 'none';
+ } else {
+ var all = document.querySelectorAll('.batch-dropdown');
+ for (var i = 0; i < all.length; i++) all[i].style.display = 'none';
+ dropdown.style.display = 'block';
+ }
+};
+
+// 点击其他地方关闭下拉
+document.addEventListener('click', function(e) {
+ if (!e.target.closest('.batch-pill') && !e.target.closest('.batch-dropdown')) {
+ var all = document.querySelectorAll('.batch-dropdown');
+ for (var i = 0; i < all.length; i++) all[i].style.display = 'none';
+ }
+});
+
+// VIP 单独发货（跳过批次选择）
+async function vipSoloShipment(customerId, customerName) {
+ if (!confirm('确定将 ' + customerName + ' 标记为不指定批次单独发货？')) return;
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest('/api/shipment/assign_batch', {
+ method: 'POST',
+ body: JSON.stringify({ customer_ids: [customerId], batch_id: -1 })
+ });
+ showToast(result.message || '已标记为单独发货', 'success');
+ setTimeout(() => window.location.reload(), 0);
+ } catch (e) {
+ showToast(e.message || '操作失败', 'error');
+ } finally {
+ unlockAction();
+ }
+}
+
+// 单个客户指定批次
+async function selectBatchForCustomer(customerId, batchId, batchNo, event) {
+ event.stopPropagation();
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest('/api/shipment/assign_batch', {
+ method: 'POST',
+ body: JSON.stringify({ customer_ids: [customerId], batch_id: batchId })
+ });
+ const msg = batchId === 0 ? '已取消批次指定' : ('已指定批次：' + (batchNo || ''));
+ showToast(result.message || msg, 'success');
+ setTimeout(() => window.location.reload(), 0);
+ } catch (e) {
+ showToast(e.message || '指定批次失败', 'error');
+ } finally {
+ unlockAction();
+ }
+}
+
+// 批量归入批次
+async function batchAssignBatch() {
+ const batchSelect = document.getElementById('assign-batch-select');
+ const batchId = batchSelect.value;
+ if (selectedCustomerIds.size === 0) {
+ showToast('请先选择客户', 'error');
+ return;
+ }
+ if (!batchId) {
+ showToast('请先选择批次', 'error');
+ return;
+ }
+ const ids = Array.from(selectedCustomerIds);
+ const targetBatchId = batchId === 'none' ? 0 : parseInt(batchId);
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest('/api/shipment/assign_batch', {
+ method: 'POST',
+ body: JSON.stringify({ customer_ids: ids, batch_id: targetBatchId })
+ });
+ showToast(result.message, 'success');
+ setTimeout(() => window.location.reload(), 600);
+ } catch (e) {
+ showToast(e.message || '操作失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ // 批量确认待打包
+ async function batchConfirm() {
+ if (selectedCustomerIds.size === 0) {
+ showToast('请先选择客户', 'error');
+ return;
+ }
+
+ const ids = Array.from(selectedCustomerIds);
+
+ // 邮编不匹配检测
+ const canProceed = await checkZipBeforeConfirm(ids);
+ if (!canProceed) return;
+
+ if (isActionLocked()) return;
+ lockAction();
+
+ try {
+ const result = await apiRequest('/api/shipment/batch_confirm', {
+ method: 'POST',
+ body: JSON.stringify({ customer_ids: ids })
+ });
+
+ showToast(result.message, 'success');
+
+ // 刷新页面状态 - 获取客户名
+ ids.forEach(cid => {
+ const nameCell = document.querySelector(`#row-${cid} td:nth-child(3) strong`);
+ const customerName = nameCell ? nameCell.textContent : '';
+ updateRowState(cid, true, customerName);
+ });
+
+ updateStats();
+ clearSelection();
+
+ } catch (e) {
+ showToast(e.message || '批量确认失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ // 批量取消确认
+ async function batchCancel() {
+ if (selectedCustomerIds.size === 0) {
+ showToast('请先选择客户', 'error');
+ return;
+ }
+
+ const ids = Array.from(selectedCustomerIds);
+ if (isActionLocked()) return;
+ lockAction();
+
+ try {
+ const result = await apiRequest('/api/shipment/batch_cancel', {
+ method: 'POST',
+ body: JSON.stringify({ customer_ids: ids })
+ });
+
+ showToast(result.message, 'success');
+
+ // 刷新页面状态
+ ids.forEach(cid => {
+ const nameCell = document.querySelector(`#row-${cid} td:nth-child(3) strong`);
+ const customerName = nameCell ? nameCell.textContent : '';
+ updateRowState(cid, false, customerName);
+ });
+
+ updateStats();
+ clearSelection();
+
+ } catch (e) {
+ showToast(e.message || '批量取消失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ // 更新行状态
+ function updateRowState(customerId, confirmed, customerName) {
+ const row = document.getElementById(`row-${customerId}`);
+ const actionsTd = document.getElementById(`actions-${customerId}`);
+
+ if (confirmed) {
+ row.classList.remove('row-batched', 'row-none');
+ row.classList.add('row-confirmed');
+ actionsTd.innerHTML = `
+ <button class="btn btn-secondary" onclick="cancelConfirm(${customerId}, '${customerName}')" style="padding: 6px 12px; font-size: 13px;">取消确认</button>
+ <button class="btn" onclick="startPack(${customerId})" style="padding: 6px 12px; font-size: 13px;"> 开始打包</button>
+ `;
+ } else {
+  row.classList.remove('row-confirmed');
+  const hasBatch = customerBatchMap[customerId];
+  if (hasBatch) {
+   row.classList.add('row-batched');
+   row.classList.remove('row-none');
+  } else {
+   row.classList.add('row-none');
+   row.classList.remove('row-batched');
+  }
+  if (hasBatch) {
+  actionsTd.innerHTML = `
+ <button class="btn" onclick="confirmShipment(${customerId}, '${customerName}')" style="padding: 6px 12px; font-size: 13px;"> 确认待打包</button>
+ `;
+ } else {
+ actionsTd.innerHTML = `
+ <span style="font-size: 12px; color: #d97706; padding: 6px 8px; background: rgba(245,158,11,0.1); border-radius: 4px;">请先选择批次</span>
+ `;
+ }
+ }
+ }
+
+ // 更新统计
+ function updateStats() {
+ const confirmed = document.querySelectorAll('.row-confirmed').length;
+ const total = {{ customers|length }};
+ document.getElementById('stat-confirmed').textContent = confirmed;
+ document.getElementById('stat-pending').textContent = total - confirmed;
+ }
+
+ // 邮编不匹配检测并警告
+ async function checkZipBeforeConfirm(customerIds) {
+ if (!_pageBatchId) return true; // 无批次筛选，跳过检测
+ try {
+ const result = await apiRequest('/api/shipment/check_zip_mismatch', {
+ method: 'POST',
+ body: JSON.stringify({ customer_ids: customerIds, batch_id: _pageBatchId })
+ });
+ const mismatches = result.data ? result.data.mismatches : [];
+ if (!mismatches || mismatches.length === 0) return true;
+
+ // 构造警告消息
+ let warningHtml = '<div style="text-align:left; max-height:250px; overflow-y:auto; margin:10px 0;">';
+ mismatches.forEach(m => {
+ warningHtml += `<div style="padding:8px 10px; margin:5px 0; background:rgba(245,158,11,0.1); border-left:3px solid var(--warning); border-radius:4px;">
+ <strong>${m.customer_name}</strong>：客户邮编 <code style="background:rgba(239,68,68,0.15); padding:1px 6px; border-radius:3px;">${m.customer_zip}</code>
+ → 批次 <strong>${m.batch_no}</strong> 邮编 <code style="background:rgba(239,68,68,0.15); padding:1px 6px; border-radius:3px;">${m.batch_zip}</code>
+ </div>`;
+ });
+ warningHtml += '</div>';
+
+ return await new Promise((resolve) => {
+ const container = document.getElementById('modal-container');
+ container.innerHTML = `
+ <div class="modal active">
+ <div class="modal-content" style="border: 2px solid var(--warning); box-shadow: 0 0 20px rgba(245,158,11,0.3);">
+ <div class="modal-title" style="color: var(--warning);"> 邮编不匹配警告</div>
+ <div class="modal-body" style="text-align: center; padding: 20px;">
+ <div style="font-size: 48px; margin-bottom: 10px;"></div>
+ <div style="font-size: 15px; line-height: 1.6; margin-bottom: 15px;">
+ <strong>${mismatches.length}</strong> 个客户的邮编与发货批次不一致，可能是误操作！
+ </div>
+ ${warningHtml}
+ <div style="margin-top: 15px; padding: 10px; background: rgba(245,158,11,0.08); border-radius: 8px; color: var(--warning); font-size: 13px;">
+ 请确认这些客户确实属于该批次，再继续操作。
+ </div>
+ </div>
+ <div class="modal-footer">
+ <button class="btn btn-secondary" id="modal-cancel-btn">取消</button>
+ <button class="btn" id="modal-confirm-btn" style="background: var(--warning); color: #fff;"> 仍要确认待打包</button>
+ </div>
+ </div>
+ </div>`;
+
+ document.getElementById('modal-cancel-btn').onclick = function() {
+ closeModal();
+ resolve(false);
+ };
+ document.getElementById('modal-confirm-btn').onclick = function() {
+ closeModal();
+ resolve(true);
+ };
+ });
+ } catch (e) {
+ // 检测API异常时放行（不阻塞正常流程）
+ return true;
+ }
+ }
+
+ // 单个确认待打包
+ async function confirmShipment(customerId, customerName) {
+ if (isActionLocked()) return;
+
+ // 邮编不匹配检测
+ const canProceed = await checkZipBeforeConfirm([customerId]);
+ if (!canProceed) return;
+
+ lockAction();
+ try {
+ const result = await apiRequest(`/api/shipment/confirm/${customerId}`, {
+ method: 'POST'
+ });
+
+ updateRowState(customerId, true, customerName);
+ updateStats();
+ showToast(result.message, 'success');
+
+ } catch (e) {
+ showToast(e.message || '确认失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ // 单个确认待打包（必须已指定批次）
+async function confirmShipmentNoBatch(customerId, customerName) {
+ showToast('请先将该客户归入批次，再确认待打包', 'error');
+}
+
+// 单个取消确认
+async function cancelConfirm(customerId, customerName) {
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest(`/api/shipment/cancel/${customerId}`, {
+ method: 'POST'
+ });
+
+ updateRowState(customerId, false, customerName);
+ updateStats();
+ showToast(result.message, 'success');
+
+ } catch (e) {
+ showToast(e.message || '取消失败', 'error');
+ } finally {
+ unlockAction();
+ }
+}
+
+ function startPack(customerId) {
+ console.log('startPack called with customerId:', customerId);
+ try {
+ window.location.href = '/pack/' + customerId;
+ } catch (e) {
+ console.error('startPack error:', e);
+ alert('跳转错误: ' + e.message);
+ }
+ }
+
+ async function showPackedDetail(customerId) {
+ document.getElementById('packed-detail-modal').classList.add('active');
+ document.getElementById('packed-detail-content').innerHTML = '<div style="text-align:center;padding:30px;">加载中...</div>';
+
+ try {
+ const result = await apiRequest(`/api/shipment/packed_info/${customerId}`);
+ const records = result.records || [];
+
+ if (records.length === 0) {
+ document.getElementById('packed-detail-content').innerHTML = '<p style="color: #64748b; text-align: center;">暂无打包记录</p>';
+ return;
+ }
+
+ let html = '<div style="max-height: 400px; overflow-y: auto;">';
+ records.forEach((r, i) => {
+ const natureClass = r.nature === '敏' ? 'badge-danger' : 'badge-success';
+ const natureText = r.nature === '敏' ? '敏货' : '普货';
+ html += `
+ <div style="padding: 15px; background: var(--bg-input); border-radius: 10px; margin-bottom: 12px; border: 1px solid var(--border);">
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+ <strong style="color: #06b6d4; font-size: 16px;"> ${r.serial}</strong>
+ <span class="badge ${natureClass}">${natureText}</span>
+ </div>
+ <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">
+ 包含: <strong>${r.trackings.length}</strong> 件包裹
+ </div>
+ <div style="font-size: 11px; color: var(--text-muted); word-break: break-all; padding: 8px; background: var(--bg-card); border-radius: 4px;">
+ ${r.trackings.join(', ')}
+ </div>
+ <div style="margin-top: 12px; text-align: right;">
+ ${r.customer_remark ? `<div style="float:left;background:rgba(245,158,11,0.12);border-left:3px solid #f59e0b;padding:4px 10px;border-radius:4px;font-size:13px;color:#92400e;font-weight:600;max-width:70%;"> 客户备注：${escapeHtml(r.customer_remark)}</div>` : ''}
+ ${r.abnormal_remark ? `<div style="float:left;clear:left;background:rgba(239,68,68,0.12);border-left:3px solid #ef4444;padding:4px 10px;border-radius:4px;font-size:13px;color:#991b1b;font-weight:600;max-width:70%;margin-top:4px;"> 异常备注：${escapeHtml(r.abnormal_remark)}</div>` : ''}
+ <button class="btn btn-warning" style="padding: 6px 12px; font-size: 13px; background: var(--warning); color: #fff;" onclick="rollbackPacked(${r.id}, ${customerId})">↩ 回退</button>
+ </div>
+ </div>`;
+ });
+ html += '</div>';
+ document.getElementById('packed-detail-content').innerHTML = html;
+
+ } catch (e) {
+ document.getElementById('packed-detail-content').innerHTML = `<p style="color: #dc2626; text-align: center;">加载失败: ${e.message}</p>`;
+ }
+ }
+
+ function closePackedDetail() {
+ document.getElementById('packed-detail-modal').classList.remove('active');
+ }
+
+ async function rollbackPacked(packedId, customerId) {
+ if (isActionLocked()) return;
+ lockAction();
+
+ try {
+ const result = await apiRequest(`/api/packed/records/rollback/${packedId}`, { method: 'POST' });
+ showToast(result.message || '回退成功', 'success');
+ // 刷新详情
+ showPackedDetail(customerId);
+ // 刷新页面以更新统计数据
+ setTimeout(() => location.reload(), 500);
+ } catch (e) {
+ showToast(e.message || '回退失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ // 初始化
+ updateStats();
+ // 分页
+ document.addEventListener('DOMContentLoaded', function() {
+ Paginator.apply('table', 15);
+ });
+
+ // ========== 客户备注编辑 ==========
+ function editCustomerRemark(displayEl, customerId) {
+ const td = displayEl.closest('td');
+ displayEl.style.display = 'none';
+ const editEl = td.querySelector('.customer-remark-edit');
+ editEl.style.display = 'flex';
+ editEl.querySelector('textarea').focus();
+ }
+
+ async function saveCustomerRemark(customerId, btn) {
+ const td = btn.closest('td');
+ const textarea = td.querySelector('.remark-textarea');
+ const remark = textarea.value.trim();
+
+ try {
+ btn.disabled = true;
+ btn.textContent = '保存中…';
+ const result = await apiRequest('/api/customer/' + customerId + '/remark', {
+ method: 'POST',
+ body: JSON.stringify({ remark: remark }),
+ headers: { 'Content-Type': 'application/json' }
+ });
+
+ if (result.success) {
+ const displayEl = td.querySelector('.customer-remark-display');
+ const remarkText = displayEl.querySelector('.remark-text');
+ if (remark) {
+ remarkText.textContent = ' ' + remark;
+ remarkText.style.color = '#7c3aed';
+ remarkText.style.fontStyle = 'normal';
+ remarkText.style.background = 'rgba(124,58,237,0.1)';
+ } else {
+ remarkText.textContent = '点击添加备注…';
+ remarkText.style.color = 'var(--text-muted)';
+ remarkText.style.fontStyle = 'italic';
+ remarkText.style.background = 'none';
+ }
+ const row = td.closest('tr');
+ row.setAttribute('data-remark', remark);
+ td.querySelector('.customer-remark-edit').style.display = 'none';
+ displayEl.style.display = 'flex';
+ showToast('客户备注已更新', 'success');
+ } else {
+ showToast(result.message || '保存失败', 'error');
+ }
+ } catch (e) {
+ showToast('网络错误：' + e.message, 'error');
+ } finally {
+ btn.disabled = false;
+ btn.textContent = '保存';
+ }
+ }
+
+ function cancelEditRemark(btn) {
+ const td = btn.closest('td');
+ const displayEl = td.querySelector('.customer-remark-display');
+ const editEl = td.querySelector('.customer-remark-edit');
+ const row = td.closest('tr');
+ const originalRemark = row.getAttribute('data-remark');
+ editEl.querySelector('textarea').value = originalRemark || '';
+ editEl.style.display = 'none';
+ displayEl.style.display = 'flex';
+ }
+
+ // 点击编辑区以外区域取消编辑
+ document.addEventListener('click', function(e) {
+ if (!e.target.closest('.customer-remark-edit') && !e.target.closest('.customer-remark-display')) {
+ document.querySelectorAll('.customer-remark-edit[style*="display: flex"]').forEach(editEl => {
+ const td = editEl.closest('td');
+ const displayEl = td.querySelector('.customer-remark-display');
+ const row = td.closest('tr');
+ editEl.querySelector('textarea').value = row.getAttribute('data-remark') || '';
+ editEl.style.display = 'none';
+ displayEl.style.display = 'flex';
+ });
+ }
+ });
+</script>
+
+<!-- ⚠️ 按钮功能后备脚本：确保即使主脚本加载失败，关键按钮仍可用 -->
+<script>
+// 安全解析 API 响应（处理 HTML 返回的情况）
+async function safeApiResponse(r) {
+  if (r.ok) return {ok:true};
+  let ct = r.headers.get('content-type') || '';
+  if (ct.includes('application/json')) {
+    try { return await r.json(); } catch(e) { return {message: 'JSON解析失败 (' + r.status + ')'}; }
+  }
+  // 返回 HTML（通常是登录页重定向）
+  let text = await r.text().catch(() => '');
+  if (text.trim().startsWith('<')) {
+    return {message: '会话已过期，请重新登录后重试 (' + r.status + ')'};
+  }
+  return {message: '请求失败 (' + r.status + ' ' + r.statusText + ')'};
+}
+
+(function() {
+  setTimeout(function() {
+    // ===== 确认待打包（单个） =====
+    if (typeof cancelConfirm === 'undefined') {
+      window.cancelConfirm = async function(customerId, customerName) {
+        if (!confirm('确定要取消客户 "' + customerName + '" 的待打包确认吗？\n取消后包裹将回到已入库状态。')) return;
+        try {
+          let r = await fetch('/api/shipment/cancel/' + customerId, {method:'POST'});
+          if (r.ok) { location.reload(); return; }
+          let d = await safeApiResponse(r);
+          alert(d.message || '取消失败');
+        } catch(e) { alert('取消失败: ' + e.message); }
+      };
+    }
+
+    // ===== 开始打包 =====
+    if (typeof startPack === 'undefined') {
+      window.startPack = function(customerId) {
+        window.location.href = '/pack/' + customerId;
+      };
+    }
+
+    // ===== 确认待打包（单个，有批次） =====
+    if (typeof confirmShipment === 'undefined') {
+      window.confirmShipment = async function(customerId, customerName) {
+        if (!confirm('确定要将客户 "' + customerName + '" 的包裹标记为待打包吗？')) return;
+        try {
+          let r = await fetch('/api/shipment/confirm/' + customerId, {method:'POST'});
+          if (r.ok) { location.reload(); return; }
+          let d = await safeApiResponse(r);
+          alert(d.message || '确认失败');
+        } catch(e) { alert('确认失败: ' + e.message); }
+      };
+    }
+
+    // ===== 批量归入批次 =====
+    if (typeof batchAssignBatch === 'undefined') {
+      window.batchAssignBatch = async function() {
+        let ids = Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => parseInt(cb.value));
+        if (!ids.length) { alert('请先选择客户'); return; }
+        let bs = document.getElementById('assign-batch-select');
+        let bid = bs ? bs.value : '';
+        if (!bid) { alert('请先选择批次'); return; }
+        if (bid === 'none') {
+          if (!confirm('确定将 ' + ids.length + ' 个客户恢复为不指定批次状态？')) return;
+          try {
+            let r = await fetch('/api/shipment/assign_batch', {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({customer_ids:ids, batch_id:0})
+            });
+            if (r.ok) location.reload();
+            else { let d = await safeApiResponse(r); alert(d.message || '移除失败'); }
+          } catch(e) { alert('移除失败: ' + e.message); }
+          return;
+        }
+        try {
+          let r = await fetch('/api/shipment/assign_batch', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({customer_ids:ids, batch_id:parseInt(bid)})
+          });
+          if (r.ok) { location.reload(); return; }
+          let d = await safeApiResponse(r);
+          alert(d.message || '归入失败');
+        } catch(e) { alert('归入失败: ' + e.message); }
+      };
+    }
+
+    // ===== 批量确认待打包 =====
+    if (typeof batchConfirm === 'undefined') {
+      window.batchConfirm = async function() {
+        let ids = Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => parseInt(cb.value));
+        if (!ids.length) { alert('请先选择客户'); return; }
+        try {
+          let r = await fetch('/api/shipment/batch_confirm', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({customer_ids:ids})
+          });
+          if (r.ok) { location.reload(); return; }
+          let d = await safeApiResponse(r);
+          alert(d.message || '确认失败');
+        } catch(e) { alert('确认失败: ' + e.message); }
+      };
+    }
+
+    // ===== 批量取消 =====
+    if (typeof batchCancel === 'undefined') {
+      window.batchCancel = async function() {
+        let ids = Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => parseInt(cb.value));
+        if (!ids.length) { alert('请先选择客户'); return; }
+        if (!confirm('确定批量取消？')) return;
+        try {
+          let r = await fetch('/api/shipment/batch_cancel', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({customer_ids:ids})
+          });
+          if (r.ok) { location.reload(); return; }
+          let d = await safeApiResponse(r);
+          alert(d.message || '取消失败');
+        } catch(e) { alert('取消失败: ' + e.message); }
+      };
+    }
+
+    // ===== 清空选择 =====
+    if (typeof clearSelection === 'undefined') {
+      window.clearSelection = function() {
+        document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('select-all').checked = false;
+      };
+    }
+
+    // ===== 全选 =====
+    if (typeof toggleSelectAll === 'undefined') {
+      window.toggleSelectAll = function() {
+        let checked = document.getElementById('select-all').checked;
+        document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = checked);
+      };
+    }
+
+    // ===== 更新批量选择状态 =====
+    if (typeof updateBatchSelection === 'undefined') {
+      window.updateBatchSelection = function() {
+        let count = document.querySelectorAll('.row-checkbox:checked').length;
+        let sc = document.getElementById('selected-count');
+        if (sc) sc.textContent = count;
+        let content = document.getElementById('batch-actions-content');
+        let hint = document.getElementById('batch-actions-hint');
+        let hasVip = false;
+        document.querySelectorAll('.row-checkbox:checked').forEach(function(cb) {
+          if (cb.classList.contains('vip-customer')) hasVip = true;
+        });
+        if (count > 0) {
+          if (content) content.style.display = 'flex';
+          if (hint) hint.style.display = 'none';
+        } else {
+          if (content) content.style.display = 'none';
+          if (hint) hint.style.display = 'block';
+          if (vipBtn) vipBtn.style.display = 'none';
+        }
+      };
+    }
+
+    console.log('[shipments fallback] key functions verified');
+  }, 1);
+})();
+
+// ===== 最终版搜索功能（全局函数，不依赖任何缓存） =====
+window._doShipmentSearch = function() {
+  var q = document.getElementById('customer-search').value.trim().toLowerCase();
+  var rows = document.querySelectorAll('tbody tr');
+  var vis = 0, total = 0;
+  rows.forEach(function(r) {
+    if (!r.id || r.id.indexOf('row-') !== 0) return;
+    total++;
+    var match = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+    r.style.display = match ? '' : 'none';
+    if (match) vis++;
+  });
+  document.getElementById('search-result').textContent = q ? ('找到 ' + vis + '/' + total + ' 个客户') : '';
+  window._shipmentSearchDropdown(q);
+};
+
+window._shipmentSearchKey = function(e) {
+  if (e.key === 'Escape') document.getElementById('search-dropdown').style.display = 'none';
+};
+
+window._shipmentSearchDropdown = function(q) {
+  var dd = document.getElementById('search-dropdown');
+  if (!q) { dd.style.display = 'none'; return; }
+  var matched = [];
+  for (var i = 0; i < _customerData.length; i++) {
+    var c = _customerData[i];
+    var txt = (c.name + ' ' + c.no + ' ' + c.barcode + ' ' + c.addr + ' ' + c.zip).toLowerCase();
+    if (txt.indexOf(q) !== -1) { matched.push(c); if (matched.length >= 8) break; }
+  }
+  if (matched.length === 0) { dd.style.display = 'none'; return; }
+  var h = '';
+  for (var j = 0; j < matched.length; j++) {
+    var m = matched[j];
+    h += '<div data-cid="' + m.id + '" style="padding:10px 14px; cursor:pointer; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; justify-content:space-between;"'
+      + ' onmouseover="this.style.background=\'#f0f4ff\'" onmouseout="this.style.background=\'\'"'
+      + ' onclick="window._shipmentSelect(' + m.id + ')">'
+      + '<div style="flex:1;min-width:0"><div style="font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._esc(m.name) + '</div>'
+      + '<div style="font-size:11px;color:#94a3b8;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._esc(m.no) + ' | ' + window._esc(m.barcode) + (m.addr ? ' | ' + window._esc(m.addr.substring(0,20)) : '') + '</div></div>'
+      + '<span style="font-size:12px;color:#6366f1;margin-left:10px;white-space:nowrap;">定位</span></div>';
+  }
+  dd.innerHTML = h;
+  dd.style.display = 'block';
+};
+
+window._esc = function(s) {
+  return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : '';
+};
+
+window._shipmentSelect = function(cid) {
+  document.getElementById('search-dropdown').style.display = 'none';
+  document.getElementById('customer-search').value = '';
+  window._doShipmentSearch();
+  var row = document.getElementById('row-' + cid);
+  if (row) {
+    row.scrollIntoView({behavior:'smooth', block:'center'});
+    row.style.transition = 'background-color 0.3s';
+    row.style.backgroundColor = 'rgba(99,102,241,0.2)';
+    setTimeout(function(){ row.style.backgroundColor = ''; }, 2500);
+    var cb = row.querySelector('.row-checkbox');
+    if (cb && !cb.checked) { cb.checked = true; updateBatchSelection(); }
+    document.getElementById('search-result').textContent = '已定位到客户';
+  }
+};
+</script>
+{% endblock %}
+
+<!-- 最终覆盖：确保 base.html 缓存的旧版 apiRequest 被覆盖 -->
+<script>
+setTimeout(function() {
+  window.apiRequest = async function(url, options) {
+    options = options || {};
+    try {
+      const headers = {};
+      if (options.body) headers['Content-Type'] = 'application/json';
+      Object.assign(headers, options.headers || {});
+      const res = await fetch(url, {
+        headers: headers,
+        body: options.body,
+        method: options.method || 'GET'
+      });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); }
+      catch(e) {
+        if (text.trim().startsWith('<')) throw new Error('会话已过期，请重新登录后重试');
+        throw new Error('服务器错误: ' + text.substring(0,200));
+      }
+      if (data.success === false || !res.ok) throw new Error(data.message || '操作失败');
+      return data;
+    } catch(e) { alert(e.message); throw e; }
+  };
+  console.log('[shipments final override] apiRequest fixed');
+}, 0);
+</script>

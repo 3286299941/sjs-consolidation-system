@@ -1,0 +1,9 @@
+flask
+flask-sqlalchemy
+sqlalchemy>=2.0
+werkzeug
+jinja2
+pycryptodome
+python-dotenv
+requests
+pymysql

@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.ch-filter { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: flex-end; }
+.ch-filter label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+.ch-filter select, .ch-filter input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+.ch-stats { display: flex; gap: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.ch-stat { flex: 1; text-align: center; padding: 10px 4px; border-right: 1px solid #f1f5f9; }
+.ch-stat:last-child { border-right: none; }
+.ch-stat .num { display: block; font-size: 20px; font-weight: 700; color: #0d2b52; }
+.ch-stat .lbl { font-size: 12px; color: var(--muted); }
+.ch-table { width: 100%; border-collapse: collapse; background: #fff; }
+.ch-table th { background: #f8fafc; font-size: 12px; color: var(--muted); text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); }
+.ch-table td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.ch-table tr:hover { background: #f8fafc; }
+.ch-badge { padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.ch-air { background: #e0f2fe; color: #0284c7; }
+.ch-sea { background: #dbeafe; color: #1d4ed8; }
+.ch-other { background: #f3e8ff; color: #7e22ce; }
+.empty-state { text-align: center; padding: 40px 0; color: var(--muted); }
+</style>
+
+<div class="card">
+<div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+<span>渠道发货单号</span>
+<span style="font-size:13px; font-weight:400; color:var(--muted);">客户选择空运/快递/小包等渠道发走的单号，已从入库明细中摘除</span>
+</div>
+
+<!-- 筛选 -->
+<form method="get" action="/channel_shipped" class="ch-filter">
+<div>
+<label>渠道</label>
+<select name="channel" onchange="this.form.submit()">
+<option value="">全部渠道</option>
+<option value="空运" {{ 'selected' if f_channel == '空运' else '' }}>空运</option>
+<option value="快递" {{ 'selected' if f_channel == '快递' else '' }}>快递</option>
+<option value="小包" {{ 'selected' if f_channel == '小包' else '' }}>小包</option>
+</select>
+</div>
+<div>
+<label>客户</label>
+<select name="customer_id" onchange="this.form.submit()">
+<option value="">全部客户</option>
+{% for c in customers %}
+<option value="{{ c.id }}" {{ 'selected' if f_customer == c.id else '' }}>{{ c.name }}</option>
+{% endfor %}
+</select>
+</div>
+<div>
+<label>开始日期</label>
+<input type="date" name="start_date" value="{{ f_start }}">
+</div>
+<div>
+<label>结束日期</label>
+<input type="date" name="end_date" value="{{ f_end }}">
+</div>
+<div>
+<label>单号搜索</label>
+<input type="text" name="tracking_number" value="{{ f_tracking }}" placeholder="输入单号片段" style="width:160px;">
+</div>
+<button type="submit" style="padding:6px 16px; border:1px solid #1565c0; background:#1565c0; color:#fff; border-radius:6px; font-size:13px; cursor:pointer;">查询</button>
+<a href="/channel_shipped" style="font-size:13px; color:#dc2626; text-decoration:none; padding-bottom:6px;">重置</a>
+</form>
+
+<!-- 渠道汇总 -->
+<div class="ch-stats">
+<div class="ch-stat"><span class="num">{{ records|length }}</span><span class="lbl">总计</span></div>
+<div class="ch-stat"><span class="num">{{ channel_stats.get('空运', 0) }}</span><span class="lbl">空运</span></div>
+<div class="ch-stat"><span class="num">{{ channel_stats.get('快递', 0) }}</span><span class="lbl">快递</span></div>
+<div class="ch-stat"><span class="num">{{ channel_stats.get('小包', 0) }}</span><span class="lbl">小包</span></div>
+</div>
+
+{% if records %}
+<table class="ch-table">
+<thead>
+<tr>
+<th>客户</th>
+<th>扫描单号</th>
+<th>渠道</th>
+<th>内部单号</th>
+<th>发货时间</th>
+<th>入库时间</th>
+<th>备注</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+{% for r in records %}
+<tr>
+<td><strong>{{ r.customer.name if r.customer else '无主' }}</strong></td>
+<td><code style="background:#f0f0f0; padding:2px 6px; border-radius:4px; font-size:12px;">{{ r.tracking_number }}</code></td>
+<td>
+{% if r.ship_channel == '空运' %}<span class="ch-badge ch-air">空运</span>
+{% elif r.ship_channel == '快递' %}<span class="ch-badge ch-sea">快递</span>
+{% else %}<span class="ch-badge ch-other">小包</span>{% endif %}
+</td>
+<td>{% if r.internal_tracking_no %}<code style="background:#eef2ff; padding:2px 6px; border-radius:4px; font-size:12px; color:#4338ca;">{{ r.internal_tracking_no }}</code>{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+<td>{{ r.shipped_at.strftime('%Y-%m-%d %H:%M') if r.shipped_at else '-' }}</td>
+<td>{{ r.entry_time.strftime('%Y-%m-%d') if r.entry_time else '-' }}</td>
+<td>
+{% if r.customer_remark %}<span style="color:#92400e; font-size:12px;">{{ r.customer_remark }}</span>{% else %}<span style="color:var(--muted); font-size:12px;">—</span>{% endif %}
+</td>
+<td>
+<button class="btn btn-warning btn-sm" onclick="unshipChannel({{ r.id }}, '{{ r.tracking_number }}')">撤销</button>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<div class="empty-state"><p>暂无渠道发货记录</p></div>
+{% endif %}
+</div>
+
+<script>
+function unshipChannel(id, tracking) {
+    if (!confirm('确定撤销该单号「' + tracking + '」的渠道发货？\n\n撤销后恢复为「已入库」状态，回到入库明细。')) return;
+    apiRequest('/api/inbound/channel_unship/' + id, { method:'POST' }).then(function(r) {
+        showToast(r.message || '操作成功', 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+    }).catch(function(e) {
+        showToast(e.message || '操作失败', 'error');
+    });
+}
+</script>
+{% endblock %}

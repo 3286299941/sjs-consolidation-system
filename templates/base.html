@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+ <meta http-equiv="Pragma" content="no-cache">
+ <meta http-equiv="Expires" content="0">
+ <title>集运管理系统</title>
+ <style>
+ /* ========== Design Tokens ========== */
+ :root {
+ --bg-primary: #f5f6fa;
+ --bg-secondary: #ffffff;
+ --bg-card: #ffffff;
+ --bg-card-hover: #fafbfc;
+ --bg-input: #ffffff;
+ --accent: #1565c0;
+ --accent-hover: #0d47a1;
+ --accent-dim: #0d47a1;
+ --accent-glow: rgba(21, 101, 192, 0.15);
+ --secondary: #764ba2;
+ --success: #10b981;
+ --success-glow: rgba(16, 185, 129, 0.15);
+ --danger: #ef4444;
+ --danger-glow: rgba(239, 68, 68, 0.15);
+ --warning: #f59e0b;
+ --warning-glow: rgba(245, 158, 11, 0.15);
+ --text-primary: #1e293b;
+ --text-secondary: #64748b;
+ --text-muted: #94a3b8;
+ --border: #e2e8f0;
+ --border-light: #cbd5e1;
+ --radius-sm: 6px;
+ --radius: 10px;
+ --radius-lg: 14px;
+ --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+ --shadow-glow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+ --transition: 0.2s ease;
+ --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, monospace;
+ }
+
+ /* ========== Reset & Base ========== */
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body {
+ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+ background: var(--bg-primary);
+ color: var(--text-primary);
+ min-height: 100vh;
+ }
+ .container {
+ max-width: 1200px;
+ margin: 0 auto;
+ padding: 0 20px;
+ }
+
+ /* ========== Header ========== */
+ header {
+ background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+ padding: 20px 0;
+ color: #fff;
+ }
+ header .container {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ }
+ h1 {
+ font-size: 22px;
+ font-weight: 700;
+ letter-spacing: 1px;
+ color: #fff;
+ }
+ .stats { display: flex; gap: 12px; }
+ .stat-item {
+ background: rgba(255, 255, 255, 0.15);
+ border: 1px solid rgba(255, 255, 255, 0.25);
+ padding: 8px 16px;
+ border-radius: var(--radius-sm);
+ text-align: center;
+ transition: all var(--transition);
+ min-width: 70px;
+ }
+ .stat-item:hover {
+ background: rgba(255, 255, 255, 0.25);
+ }
+ .stat-value {
+ font-size: 22px;
+ font-weight: 700;
+ font-family: var(--font-mono);
+ color: #fff;
+ line-height: 1.2;
+ }
+ .stat-label {
+ font-size: 11px;
+ color: rgba(255, 255, 255, 0.75);
+ margin-top: 2px;
+ }
+ .btn-logout {
+ color: rgba(255,255,255,0.85);
+ text-decoration: none;
+ font-size: 13px;
+ padding: 6px 14px;
+ border: 1px solid rgba(255,255,255,0.3);
+ border-radius: 6px;
+ transition: all var(--transition);
+ white-space: nowrap;
+ }
+ .btn-logout:hover {
+ background: rgba(255,255,255,0.15);
+ color: #fff;
+ }
+
+ /* ========== Navigation ========== */
+ nav {
+ background: #fff;
+ border-bottom: 1px solid var(--border);
+ margin-bottom: 20px;
+ position: sticky;
+ top: 0;
+ z-index: 100;
+ box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+ }
+ nav .container { display: flex; gap: 0; overflow-x: auto; }
+nav a {
+ display: block;
+ padding: 13px 18px;
+ color: var(--text-secondary);
+ text-decoration: none;
+ font-weight: 500;
+ font-size: 13px;
+ white-space: nowrap;
+ border-bottom: 2px solid transparent;
+ transition: all var(--transition);
+ cursor: pointer;
+}
+nav a:hover {
+ color: var(--accent);
+ background: rgba(102, 126, 234, 0.05);
+}
+nav a.active {
+ color: var(--accent);
+ border-bottom-color: var(--accent);
+ font-weight: 600;
+}
+nav .nav-dropdown {
+ position: relative;
+ display: inline-flex;
+ align-items: center;
+}
+nav .nav-dropdown > a,
+nav .nav-dropdown > span {
+ display: flex;
+ align-items: center;
+ gap: 4px;
+ padding: 13px 18px;
+ color: var(--text-secondary);
+ text-decoration: none;
+ font-weight: 500;
+ font-size: 13px;
+ white-space: nowrap;
+ border-bottom: 2px solid transparent;
+ transition: all var(--transition);
+ cursor: pointer;
+}
+nav .nav-dropdown > a:hover,
+nav .nav-dropdown > span:hover {
+ color: var(--accent);
+ background: rgba(102, 126, 234, 0.05);
+}
+nav .nav-dropdown.active > a,
+nav .nav-dropdown.active > span {
+ color: var(--accent);
+ border-bottom-color: var(--accent);
+ font-weight: 600;
+}
+nav .nav-dropdown .dropdown-menu {
+ display: none;
+ position: absolute;
+ top: 100%;
+ left: 0;
+ background: #fff;
+ border: 1px solid var(--border);
+ border-radius: 0 0 var(--radius) var(--radius);
+ box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+ min-width: 140px;
+ z-index: 200;
+}
+nav .nav-dropdown .dropdown-menu a {
+ display: block;
+ padding: 10px 18px;
+ font-size: 13px;
+ border-bottom: none;
+ border-left: 2px solid transparent;
+}
+nav .nav-dropdown .dropdown-menu a:hover {
+ background: rgba(102, 126, 234, 0.06);
+ color: var(--accent);
+}
+nav .nav-dropdown .dropdown-menu a.active {
+ color: var(--accent);
+ border-left-color: var(--accent);
+ background: rgba(102, 126, 234, 0.06);
+ font-weight: 600;
+}
+nav .nav-dropdown:hover .dropdown-menu,
+nav .nav-dropdown.open .dropdown-menu {
+ display: block;
+}
+nav .nav-dropdown .caret {
+ font-size: 10px;
+ opacity: 0.6;
+ transition: transform 0.2s;
+}
+
+ /* ========== Cards ========== */
+ .card {
+ background: var(--bg-card);
+ border: 1px solid var(--border);
+ border-radius: var(--radius-lg);
+ padding: 20px;
+ box-shadow: var(--shadow);
+ margin-bottom: 16px;
+ }
+ .card-title {
+ font-size: 16px;
+ font-weight: 600;
+ margin-bottom: 16px;
+ padding-bottom: 12px;
+ border-bottom: 2px solid var(--border);
+ color: var(--text-primary);
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ }
+ .card-title::before {
+ content: '';
+ display: inline-block;
+ width: 4px;
+ height: 18px;
+ background: var(--accent);
+ border-radius: 2px;
+ }
+
+ /* ========== Buttons ========== */
+ .btn {
+ display: inline-flex;
+ align-items: center;
+ justify-content: center;
+ padding: 8px 16px;
+ background: var(--accent);
+ color: #fff;
+ border: 1px solid var(--accent);
+ border-radius: var(--radius-sm);
+ cursor: pointer;
+ font-size: 13px;
+ font-weight: 500;
+ text-decoration: none;
+ transition: all var(--transition);
+ white-space: nowrap;
+ gap: 4px;
+ }
+ .btn:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+ .btn:active { transform: scale(0.98); }
+ .btn:disabled {
+ opacity: 0.5;
+ cursor: not-allowed;
+ transform: none;
+ }
+
+ .btn-secondary {
+ background: var(--bg-primary);
+ color: var(--text-primary);
+ border: 1px solid var(--border);
+ }
+ .btn-secondary:hover {
+ background: var(--border);
+ border-color: var(--border-light);
+ }
+
+ .btn-danger {
+ background: #fff;
+ color: var(--danger);
+ border: 1px solid #fecaca;
+ }
+ .btn-danger:hover {
+ background: #fef2f2;
+ border-color: var(--danger);
+ }
+
+ .btn-danger-strong {
+ background: var(--danger);
+ color: #fff;
+ border: 1px solid var(--danger);
+ }
+ .btn-danger-strong:hover {
+ background: #dc2626;
+ }
+
+ .btn-xs {
+ padding: 4px 10px;
+ font-size: 12px;
+ border-radius: 4px;
+ }
+
+ .btn-success {
+ background: var(--success);
+ color: #fff;
+ border: 1px solid var(--success);
+ }
+ .btn-success:hover {
+ background: #059669;
+ }
+
+ /* ========== Table ========== */
+ table { width: 100%; border-collapse: collapse; font-size: 13px; }
+ th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+ th {
+ background: var(--bg-primary);
+ font-weight: 600;
+ color: var(--text-secondary);
+ font-size: 12px;
+ white-space: nowrap;
+ }
+ tbody tr:hover { background: rgba(102, 126, 234, 0.03); }
+
+ /* ========== Badges ========== */
+ .badge {
+ display: inline-block;
+ padding: 2px 8px;
+ border-radius: 12px;
+ font-size: 11px;
+ font-weight: 500;
+ }
+ .badge-danger {
+ background: #fef2f2;
+ color: #dc2626;
+ border: 1px solid #fecaca;
+ }
+ .badge-success {
+ background: #ecfdf5;
+ color: #059669;
+ border: 1px solid #a7f3d0;
+ }
+ .badge-info {
+ background: #eff6ff;
+ color: #2563eb;
+ border: 1px solid #bfdbfe;
+ }
+ .badge-warning {
+ background: #fffbeb;
+ color: #d97706;
+ border: 1px solid #fde68a;
+ }
+
+ /* ========== Form Controls ========== */
+ .form-group { margin-bottom: 14px; }
+ .form-group label {
+ display: block;
+ margin-bottom: 5px;
+ font-weight: 500;
+ font-size: 13px;
+ color: var(--text-secondary);
+ }
+ .form-group input,
+ .form-group select,
+ .form-group textarea {
+ width: 100%;
+ padding: 9px 12px;
+ background: var(--bg-input);
+ border: 1px solid var(--border);
+ border-radius: var(--radius-sm);
+ font-size: 13px;
+ color: var(--text-primary);
+ transition: all var(--transition);
+ font-family: inherit;
+ }
+ .form-group input:focus,
+ .form-group select:focus,
+ .form-group textarea:focus {
+ outline: none;
+ border-color: var(--accent);
+ box-shadow: var(--shadow-glow);
+ }
+ .form-group input::placeholder,
+ .form-group textarea::placeholder {
+ color: var(--text-muted);
+ }
+ .form-group select { cursor: pointer; }
+ .form-group select option {
+ background: #fff;
+ color: var(--text-primary);
+ }
+ .form-group input[readonly],
+ .form-group textarea[readonly] {
+ background: var(--bg-primary);
+ cursor: default;
+ }
+ .form-section {
+ background: rgba(102, 126, 234, 0.03);
+ border: 1px solid var(--border);
+ }
+
+ /* ========== Search Box ========== */
+ .search-box {
+ display: flex;
+ gap: 10px;
+ margin-bottom: 16px;
+ flex-wrap: wrap;
+ }
+ .search-box input {
+ flex: 1;
+ min-width: 180px;
+ padding: 9px 12px;
+ background: var(--bg-input);
+ border: 1px solid var(--border);
+ border-radius: var(--radius-sm);
+ font-size: 13px;
+ color: var(--text-primary);
+ transition: all var(--transition);
+ }
+ .search-box input:focus {
+ outline: none;
+ border-color: var(--accent);
+ box-shadow: var(--shadow-glow);
+ }
+ .search-box select {
+ padding: 9px 12px;
+ background: var(--bg-input);
+ border: 1px solid var(--border);
+ border-radius: var(--radius-sm);
+ font-size: 13px;
+ color: var(--text-primary);
+ cursor: pointer;
+ }
+ .search-box select:focus {
+ outline: none;
+ border-color: var(--accent);
+ }
+
+ /* ========== Modal ========== */
+ .modal {
+ display: none;
+ position: fixed;
+ top: 0; left: 0;
+ width: 100%; height: 100%;
+ background: rgba(0, 0, 0, 0.4);
+ z-index: 1000;
+ justify-content: center;
+ align-items: center;
+ }
+ .modal.active { display: flex; }
+ .modal-content {
+ background: #fff;
+ border: 1px solid var(--border);
+ padding: 24px;
+ border-radius: var(--radius-lg);
+ max-width: 520px;
+ width: 92%;
+ max-height: 85vh;
+ overflow-y: auto;
+ box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+ }
+ .modal-title {
+ font-size: 17px;
+ font-weight: 600;
+ margin-bottom: 16px;
+ color: var(--text-primary);
+ padding-bottom: 12px;
+ border-bottom: 1px solid var(--border);
+ }
+ .modal-footer {
+ display: flex;
+ gap: 10px;
+ justify-content: flex-end;
+ margin-top: 16px;
+ padding-top: 14px;
+ border-top: 1px solid var(--border);
+ }
+ /* 二级密码弹窗样式 */
+ .modal-overlay {
+ position: fixed;
+ top: 0; left: 0;
+ width: 100%; height: 100%;
+ background: rgba(0,0,0,0.45);
+ z-index: 2000;
+ display: flex;
+ justify-content: center;
+ align-items: center;
+ }
+ .modal-box {
+ background: #fff;
+ padding: 30px;
+ border-radius: var(--radius-lg);
+ max-width: 420px;
+ width: 92%;
+ box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+ text-align: center;
+ }
+ .modal-icon {
+ font-size: 48px;
+ margin-bottom: 12px;
+ }
+
+ /* ========== Empty State ========== */
+ .empty-state {
+ text-align: center;
+ padding: 50px 20px;
+ color: var(--text-muted);
+ }
+ .empty-state p {
+ font-size: 14px;
+ }
+
+ /* ========== File Upload ========== */
+ .file-upload {
+ border: 2px dashed var(--border);
+ padding: 24px;
+ text-align: center;
+ border-radius: var(--radius);
+ cursor: pointer;
+ transition: all var(--transition);
+ }
+ .file-upload:hover {
+ border-color: var(--accent);
+ background: rgba(102, 126, 234, 0.03);
+ }
+ .file-upload input { display: none; }
+
+ /* ========== Toast ========== */
+ .toast {
+ position: fixed;
+ bottom: 24px;
+ right: 24px;
+ padding: 16px 24px;
+ min-width: 280px;
+ background: #fff;
+ color: var(--text-primary);
+ border: 2px solid var(--border);
+ border-radius: 8px;
+ z-index: 2000;
+ font-size: 16px;
+ font-weight: 500;
+ box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+ animation: slideIn 0.3s ease;
+ }
+ .toast.success {
+ background: #d1fae5;
+ border-color: #059669;
+ color: #064e3b;
+ border-left: 6px solid #059669;
+ }
+ .toast.error {
+ background: #fee2e2;
+ border-color: #b91c1c;
+ color: #7f1d1d;
+ border-left: 6px solid #b91c1c;
+ }
+ .toast.warning {
+ background: #fef3c7;
+ border-color: #b45309;
+ color: #78350f;
+ border-left: 6px solid #b45309;
+ }
+ .toast.info {
+ background: #dbeafe;
+ border-color: #1d4ed8;
+ color: #1e3a8a;
+ border-left: 6px solid #1d4ed8;
+ }
+
+ /* ========== Animations ========== */
+ @keyframes slideIn {
+ from { transform: translateX(100%); opacity: 0; }
+ to { transform: translateX(0); opacity: 1; }
+ }
+ @keyframes fadeIn {
+ from { opacity: 0; }
+ to { opacity: 1; }
+ }
+ @keyframes slideUp {
+ from { transform: translateY(20px); opacity: 0; }
+ to { transform: translateY(0); opacity: 1; }
+ }
+
+ /* ========== Scrollbar ========== */
+ ::-webkit-scrollbar { width: 6px; height: 6px; }
+ ::-webkit-scrollbar-track { background: var(--bg-primary); }
+ ::-webkit-scrollbar-thumb {
+ background: #cbd5e1;
+ border-radius: 3px;
+ }
+ ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+ /* ========== Pagination ========== */
+ .pagination-container {
+ display: flex;
+ justify-content: center;
+ align-items: center;
+ gap: 8px;
+ margin-top: 16px;
+ flex-wrap: wrap;
+ }
+ .pagination-container button {
+ padding: 6px 14px;
+ border: 1px solid var(--border);
+ border-radius: var(--radius-sm);
+ background: var(--bg-card);
+ color: var(--text-primary);
+ cursor: pointer;
+ font-size: 13px;
+ transition: all var(--transition);
+ }
+ .pagination-container button:hover:not(:disabled) {
+ background: var(--accent);
+ color: #fff;
+ border-color: var(--accent);
+ }
+ .pagination-container button:disabled {
+ opacity: 0.4;
+ cursor: not-allowed;
+ }
+ .pagination-container button.active {
+ background: var(--accent);
+ color: #fff;
+ border-color: var(--accent);
+ font-weight: 600;
+ }
+ .pagination-container .page-info {
+ font-size: 13px;
+ color: var(--text-secondary);
+ }
+ .pagination-container select {
+ padding: 6px 10px;
+ border: 1px solid var(--border);
+ border-radius: var(--radius-sm);
+ font-size: 13px;
+ background: var(--bg-card);
+ color: var(--text-primary);
+ cursor: pointer;
+ }
+
+ /* ========== Print ========== */
+ @media print {
+ body { background: white; color: #333; }
+ header, nav, .btn, .no-print { display: none !important; }
+ .container { max-width: 100%; padding: 0; }
+ .card {
+ background: white;
+ box-shadow: none;
+ border: none;
+ padding: 0;
+ }
+ .card-title { border-bottom: 1px solid #ccc; }
+ .card-title::before { display: none; }
+ th { background: #eee; color: #333; }
+ td, th { border-bottom-color: #ccc; color: #333; }
+ .badge { border: 1px solid #ccc; }
+ table { color: #333; }
+ }
+
+ /* ========== Camera Scanner ========== */
+ @keyframes scanLineAnim {
+ 0%, 100% { top: 0; opacity: 1; }
+ 50% { top: calc(100% - 2px); opacity: 0.3; }
+ }
+ .camera-btn {
+ display: inline-flex; align-items: center; gap: 6px;
+ padding: 8px 14px;
+ background: linear-gradient(135deg, #667eea, #764ba2);
+ color: #fff; border: none; border-radius: 8px;
+ cursor: pointer; font-size: 13px; white-space: nowrap;
+ transition: all 0.2s;
+ box-shadow: 0 2px 8px rgba(102,126,234,0.25);
+ }
+ .camera-btn:hover {
+ transform: translateY(-1px);
+ box-shadow: 0 4px 16px rgba(102,126,234,0.4);
+ }
+ .camera-btn-xs {
+ padding: 6px 10px; font-size: 12px;
+ }
+ #camera-modal {
+ display: none;
+ position: fixed; top: 0; left: 0;
+ width: 100%; height: 100%;
+ background: rgba(0,0,0,0.7);
+ z-index: 9999;
+ justify-content: center; align-items: center;
+ }
+ </style>
+</head>
+<body>
+ <header>
+ <div class="container">
+ <div style="display: flex; align-items: center; gap: 12px;">
+ <img src="/static/logo.png" alt="公司Logo" style="height: 36px; width: auto; border-radius: 6px;">
+ <h1>集运管理系统</h1>
+ </div>
+ <div class="stats" id="stats">
+ <div class="stat-item">
+ <div class="stat-value" id="stat-customers">-</div>
+ <div class="stat-label">客户数</div>
+ </div>
+ <div class="stat-item">
+ <div class="stat-value" id="stat-pending">-</div>
+ <div class="stat-label">已入库</div>
+ </div>
+ <div class="stat-item">
+ <div class="stat-value" id="stat-packed">-</div>
+ <div class="stat-label">已打包</div>
+ </div>
+ <div class="stat-item">
+ <div class="stat-value" id="stat-cartons">-</div>
+ <div class="stat-label">箱子数</div>
+ </div>
+ </div>
+ <a href="/logout" class="btn-logout" title="退出登录"> 退出</a>
+ </div>
+ </header>
+
+ <nav>
+ <div class="container">
+            <a href="/" onclick="navigateTo(event, '/')">首页</a>
+            <a href="/customers" onclick="navigateTo(event, '/customers')">客户管理</a>
+            <a href="/inbound" onclick="navigateTo(event, '/inbound')">入库扫描</a>
+            <a href="/inbound/records" onclick="navigateTo(event, '/inbound/records')">单号管理</a>
+            <a href="/packing" onclick="navigateTo(event, '/packing')" style="color: var(--accent); font-weight: 600;">打包操作</a>
+            <a href="/batch" onclick="navigateTo(event, '/batch')">批次管理</a>
+            <a href="/packed_records" onclick="navigateTo(event, '/packed_records')">打包记录</a>
+            <a href="/shipments" onclick="navigateTo(event, '/shipments')">待打包确认</a>
+            <a href="/carton" onclick="navigateTo(event, '/carton')">合箱管理</a>
+            <a href="/warehouse" onclick="navigateTo(event, '/warehouse')">仓库管理</a>
+            <a href="/freight" onclick="navigateTo(event, '/freight')">运费管理</a>
+            <a href="/export_data" onclick="navigateTo(event, '/export_data')">数据导出</a>
+            <a href="/invoice/config" onclick="navigateTo(event, '/invoice/config')">发票生成</a>
+ </div>
+ </nav>
+
+ <!-- 单号管理子导航 -->
+ <div id="subnav" style="display:none; background: #f0f4ff; border-bottom: 1px solid var(--border);">
+ <div class="container" style="display:flex; gap:0;">
+ <a href="/inbound/records" data-subnav="records" onclick="navigateTo(event, '/inbound/records')" 
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 入库明细
+ </a>
+ <a href="/all_orders" data-subnav="orders" onclick="navigateTo(event, '/all_orders')" 
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 全部单号
+ </a>
+ <a href="/anonymous" data-subnav="anonymous" onclick="navigateTo(event, '/anonymous')"
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 无主单号
+ </a>
+ <a href="/lost_packages" data-subnav="lost" onclick="navigateTo(event, '/lost_packages')"
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 丢失单号
+ </a>
+ </div>
+ </div>
+
+ <!-- 客户管理子导航 -->
+ <div id="subnav-customers" style="display:none; background: #f0f4ff; border-bottom: 1px solid var(--border);">
+ <div class="container" style="display:flex; gap:0;">
+ <a href="/customers" data-subnav-cust="normal" onclick="navigateTo(event, '/customers')" 
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 普通客户
+ </a>
+ <a href="/customers?vip=1" data-subnav-cust="vip" onclick="navigateTo(event, '/customers?vip=1')" 
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 单独地址客户
+ </a>
+ <a href="/address_book" data-subnav-cust="address" onclick="navigateTo(event, '/address_book')"
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 地址库
+ </a>
+ </div>
+ </div>
+
+ <!-- 打包记录子导航 -->
+ <div id="subnav-packed" style="display:none; background: #f0f4ff; border-bottom: 1px solid var(--border);">
+ <div class="container" style="display:flex; gap:0;">
+ <a href="/packed_records" data-subnav-packed="packed" onclick="navigateTo(event, '/packed_records')"
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 拼邮打包记录
+ </a>
+ <a href="/vip/packed" data-subnav-packed="vip" onclick="navigateTo(event, '/vip/packed')"
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ VIP单独发货
+ </a>
+ <a href="/packed_records?view=channel" data-subnav-packed="channel" onclick="navigateTo(event, '/packed_records?view=channel')"
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 渠道发货
+ </a>
+ </div>
+ </div>
+
+ <!-- 打包记录子导航 -->
+ <div id="subnav-packed" style="display:none; background: #f0f4ff; border-bottom: 1px solid var(--border);">
+ <div class="container" style="display:flex; gap:0;">
+ <a href="/packed_records" data-subnav-packed="group" onclick="navigateTo(event, '/packed_records')" 
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ 拼邮打包记录
+ </a>
+ <a href="/vip/packed" data-subnav-packed="vip" onclick="navigateTo(event, '/vip/packed')" 
+ style="padding:10px 20px; color:var(--text-secondary); text-decoration:none; font-size:13px; font-weight:500; border-bottom:2px solid transparent; transition:all var(--transition);">
+ VIP单独发货
+ </a>
+ </div>
+ </div>
+
+ <main class="container" style="padding-top: 20px; padding-bottom: 40px;">
+ {% block content %}{% endblock %}
+ </main>
+
+ <div id="modal-container"></div>
+ <div id="toast-container"></div>
+
+ <script>
+ async function loadStats() {
+ try {
+ const res = await fetch('/api/stats');
+ const data = await res.json();
+ document.getElementById('stat-customers').textContent = data.total_customers;
+ document.getElementById('stat-pending').textContent = data.pending_packages;
+ document.getElementById('stat-packed').textContent = data.packed_count;
+ document.getElementById('stat-cartons').textContent = data.cartons_count;
+ } catch (e) { console.error('加载统计失败', e); }
+ }
+
+ function navigateTo(event, url) {
+ event.preventDefault();
+ window.location.href = url;
+ }
+
+ // ========== 二级密码验证（全局） ==========
+ async function verifySecondaryPassword(password) {
+ try {
+ const res = await fetch('/api/verify_secondary_password', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ password: password })
+ });
+ const data = await res.json();
+ return data;
+ } catch (e) {
+ return { success: false, message: '网络错误' };
+ }
+ }
+
+ function showSecondaryPasswordModal(callback, title) {
+ title = title || '操作验证';
+ const modalHtml = `
+ <div class="modal-overlay" id="secondary-pwd-overlay" onclick="if(event.target===this)closeSecondaryPasswordModal()">
+ <div class="modal-box" style="max-width: 400px; padding: 0; overflow: hidden; border-radius: 16px; position: relative;">
+ <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #1b2f9e 0%, #2450c8 40%, #f08020 100%); z-index: 2;"></div>
+ <div style="background: radial-gradient(circle at 85% 0%, rgba(240,128,32,0.28), transparent 55%), linear-gradient(180deg, #2d52b6 0%, #214199 100%); color: #fff; padding: 24px 24px 20px; display: flex; align-items: center; justify-content: space-between;">
+ <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+ <svg viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="1.8" width="24" height="24" stroke-linecap="round" stroke-linejoin="round">
+ <path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z"/>
+ <path d="M9 12l2 2 4-4"/>
+ </svg>
+ </div>
+ <img src="/static/logo.png" alt="logo" style="height: 20px; width: auto; display: block; background: #ffffff; border-radius: 8px; padding: 6px 12px;">
+ </div>
+ <div style="padding: 22px 24px 22px;">
+ <h3 style="margin: 0 0 4px; font-size: 16px; font-weight: 600; color: var(--text-primary); letter-spacing: 0.5px;">${escapeHtml(title)}</h3>
+ <div id="sec-pwd-error" style="color: #dc2626; font-size: 12px; margin-top: 8px; display: none;"></div>
+ <div style="position: relative; margin-top: 16px;">
+ <svg style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); color: #94a3b8; width: 18px; height: 18px; transition: color .2s;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+ <rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+ </svg>
+ <input type="password" id="sec-pwd-input" placeholder="请输入二级密码"
+ style="width: 100%; padding: 12px 0 12px 28px; border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 15px; outline: none; background: transparent; transition: border-color .2s;"
+ onkeydown="if(event.key==='Enter')submitSecondaryPassword()" onfocus="this.parentElement.querySelector('svg').style.color='#2d52b6'" onblur="this.parentElement.querySelector('svg').style.color='#94a3b8'">
+ </div>
+ <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+ <button class="btn btn-secondary" onclick="closeSecondaryPasswordModal()">取消</button>
+ <button class="btn" onclick="submitSecondaryPassword()" style="background: linear-gradient(135deg, #2d52b6, #214199); color: #fff; padding: 8px 24px; border: none; font-weight: 600; box-shadow: 0 4px 14px rgba(45,82,182,0.25);">确认</button>
+ </div>
+ </div>
+ </div>
+ </div>
+ `;
+ document.getElementById('modal-container').innerHTML = modalHtml;
+ // 保存回调
+ window._secPwdCallback = callback;
+ setTimeout(() => {
+ const input = document.getElementById('sec-pwd-input');
+ if (input) input.focus();
+ }, 100);
+ }
+
+ function closeSecondaryPasswordModal() {
+ document.getElementById('modal-container').innerHTML = '';
+ window._secPwdCallback = null;
+ }
+
+ async function submitSecondaryPassword() {
+ const input = document.getElementById('sec-pwd-input');
+ const errorEl = document.getElementById('sec-pwd-error');
+ const password = input.value.trim();
+
+ if (!password) {
+ errorEl.textContent = '请输入二级密码';
+ errorEl.style.display = 'block';
+ return;
+ }
+
+ const result = await verifySecondaryPassword(password);
+ if (result.success) {
+ const cb = window._secPwdCallback;
+ closeSecondaryPasswordModal();
+ if (typeof cb === 'function') {
+ cb();
+ }
+ } else {
+ errorEl.textContent = ' ' + (result.message || '二级密码错误');
+ errorEl.style.display = 'block';
+ input.value = '';
+ input.focus();
+ }
+ }
+
+ function escapeHtml(str) {
+ if (!str) return '';
+ const div = document.createElement('div');
+ div.textContent = str;
+ return div.innerHTML;
+ }
+
+function showToast(message, type) {
+ type = type || 'info';
+ const container = document.getElementById('toast-container');
+ const toast = document.createElement('div');
+ toast.className = 'toast ' + type;
+ toast.style.padding = '12px 20px';
+ toast.style.fontSize = '15px';
+ toast.style.fontWeight = '600';
+ toast.textContent = (type === 'success' ? '✓ ' : '') + message;
+ container.appendChild(toast);
+ setTimeout(function() { toast.remove(); }, 4000);
+}
+
+ // ========== 音效 ==========
+ let _audioCtx = null;
+ function playBeep(type) {
+ try {
+ if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+ if (_audioCtx.state === 'suspended') _audioCtx.resume();
+ const ctx = _audioCtx;
+ const master = ctx.createGain();
+ master.gain.value = 1.0;
+ master.connect(ctx.destination);
+ if (type === 'success') {
+ // 成功：清脆叮咚
+ [{ freq: 1047, start: 0, dur: 0.12 }, { freq: 1319, start: 0.14, dur: 0.16 }].forEach(t => {
+ const o = ctx.createOscillator();
+ const g = ctx.createGain();
+ o.type = 'sine'; o.frequency.value = t.freq;
+ g.gain.setValueAtTime(0.8, ctx.currentTime + t.start);
+ g.gain.setValueAtTime(0, ctx.currentTime + t.start + t.dur);
+ o.connect(g); g.connect(master);
+ o.start(ctx.currentTime + t.start); o.stop(ctx.currentTime + t.start + t.dur);
+ });
+ } else if (type === 'warning') {
+ // 警告（重复扫描）：短嘟
+ const o = ctx.createOscillator();
+ const g = ctx.createGain();
+ o.type = 'sine'; o.frequency.value = 440;
+ g.gain.setValueAtTime(0.6, ctx.currentTime);
+ g.gain.setValueAtTime(0, ctx.currentTime + 0.3);
+ o.connect(g); g.connect(master);
+ o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.3);
+ } else {
+ // 失败：下降低音（咚-咚↓）
+ [{ freq: 400, start: 0, dur: 0.12 }, { freq: 260, start: 0.14, dur: 0.16 }].forEach(t => {
+ const o = ctx.createOscillator();
+ const g = ctx.createGain();
+ o.type = 'sine'; o.frequency.value = t.freq;
+ g.gain.setValueAtTime(0.8, ctx.currentTime + t.start);
+ g.gain.setValueAtTime(0, ctx.currentTime + t.start + t.dur);
+ o.connect(g); g.connect(master);
+ o.start(ctx.currentTime + t.start); o.stop(ctx.currentTime + t.start + t.dur);
+ });
+ }
+ } catch(e) {}
+ }
+
+ function showModal(title, content, onConfirm) {
+ const container = document.getElementById('modal-container');
+ container.innerHTML = '<div class="modal active"><div class="modal-content">' +
+ '<div class="modal-title">' + title + '</div>' +
+ '<div class="modal-body">' + content + '</div>' +
+ '<div class="modal-footer">' +
+ '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
+ '<button class="btn" id="modal-confirm">确定</button></div></div></div>';
+ document.getElementById('modal-confirm').onclick = function() {
+ if (onConfirm) onConfirm();
+ closeModal();
+ };
+ }
+
+ function closeModal() {
+ document.getElementById('modal-container').innerHTML = '';
+ }
+
+ // ===== 防误操作工具函数 =====
+ function confirmDelete(message, onConfirm) {
+ if (!confirm(message)) return;
+ if (onConfirm) onConfirm();
+ }
+
+ function confirmAction(title, message, onConfirm) {
+ return new Promise(async (resolve) => {
+ const container = document.getElementById('modal-container');
+ container.innerHTML = `
+ <div class="modal active">
+ <div class="modal-content">
+ <div class="modal-title">${title}</div>
+ <div class="modal-body" style="text-align: center; padding: 20px;">
+ <div style="font-size: 48px; margin-bottom: 15px;"></div>
+ <div style="font-size: 16px; line-height: 1.6;">${message}</div>
+ </div>
+ <div class="modal-footer">
+ <button class="btn btn-secondary" id="modal-cancel-btn">取消</button>
+ <button class="btn btn-danger-strong" id="modal-confirm-btn">确定执行</button>
+ </div>
+ </div>
+ </div>`;
+
+ document.getElementById('modal-cancel-btn').onclick = function() {
+ closeModal();
+ resolve(false);
+ };
+ document.getElementById('modal-confirm-btn').onclick = async function() {
+ closeModal();
+ if (onConfirm) {
+ try {
+ await onConfirm();
+ resolve(true);
+ } catch (e) {
+ console.error('confirmAction error:', e);
+ if (typeof showToast === 'function') showToast(e.message || '操作失败', 'error');
+ resolve(false);
+ }
+ } else {
+ resolve(true);
+ }
+ };
+ });
+ }
+
+ window._actionLocked = false;
+ window._actionLockTimeout = null;
+ function lockAction(timeoutMs) {
+ if (window._actionLocked) return true;
+ window._actionLocked = true;
+ const timeout = timeoutMs || 5000;
+ if (window._actionLockTimeout) clearTimeout(window._actionLockTimeout);
+ window._actionLockTimeout = setTimeout(() => {
+ window._actionLocked = false;
+ window._actionLockTimeout = null;
+ }, timeout);
+ return false;
+ }
+ function unlockAction() {
+ window._actionLocked = false;
+ if (window._actionLockTimeout) {
+ clearTimeout(window._actionLockTimeout);
+ window._actionLockTimeout = null;
+ }
+ }
+ function isActionLocked() {
+ if (window._actionLocked) {
+ showToast('操作太快了，请稍候...', 'info');
+ return true;
+ }
+ return false;
+ }
+
+ async function apiRequest(url, options) {
+ options = options || {};
+ try {
+ const headers = {};
+ if (options.body) {
+ headers['Content-Type'] = 'application/json';
+ }
+ Object.assign(headers, options.headers || {});
+ const res = await fetch(url, {
+ headers: headers,
+ body: options.body,
+ method: options.method || 'GET'
+ });
+ const text = await res.text();
+ let data;
+ try {
+ data = JSON.parse(text);
+ } catch (e) {
+ // 检查是否是 HTML 响应（通常是登录页重定向）
+ if (text.trim().startsWith('<')) {
+ throw new Error('会话已过期，请重新登录后重试');
+ }
+ const errorMsg = text.substring(0, 200) || `HTTP ${res.status}`;
+ throw new Error('服务器错误: ' + errorMsg);
+ }
+ if (data.success === false || !res.ok) {
+ throw new Error(data.message || data.msg || '操作失败');
+ }
+ return data;
+ } catch (e) {
+ if (e.message && !e.message.includes('服务器返回了非JSON')) {
+ showToast(e.message, 'error');
+ }
+ throw e;
+ }
+ }
+
+ // ===== 通用分页工具 =====
+ window.Paginator = {
+ // 为指定table启用分页
+ apply(tableSelector, rowsPerPage, options) {
+ rowsPerPage = rowsPerPage || 20;
+ options = options || {};
+ const table = document.querySelector(tableSelector);
+ if (!table) return;
+ const tbody = table.querySelector('tbody');
+ if (!tbody) {
+ // 如果不是table，尝试按子元素分页（div列表）
+ const items = Array.from(table.children).filter(el => el.tagName !== 'SCRIPT' && (!el.id || !el.id.endsWith('-pagination')));
+ if (items.length > rowsPerPage) {
+ return this._paginateItems(items, rowsPerPage, options, table);
+ }
+ return;
+ }
+
+ const allRows = Array.from(tbody.querySelectorAll('tr'));
+ return this._paginateItems(allRows, rowsPerPage, options, table);
+ },
+
+ _paginateItems(items, rowsPerPage, options, container) {
+ const totalRows = items.length;
+ if (totalRows <= rowsPerPage) return;
+
+ let currentPage = 1;
+ const totalPages = Math.ceil(totalRows / rowsPerPage);
+ const containerId = options.containerId || ('paginator-' + (container.id || 'auto'));
+
+ let pagContainer = document.getElementById(containerId);
+ if (!pagContainer) {
+ pagContainer = document.createElement('div');
+ pagContainer.id = containerId;
+ pagContainer.className = 'pagination-container';
+ container.parentNode.insertBefore(pagContainer, container.nextSibling);
+ }
+
+ const ctrlName = '_paginator_' + containerId;
+ const that = this;
+
+ function showPage(page) {
+ currentPage = page;
+ const start = (page - 1) * rowsPerPage;
+ const end = start + rowsPerPage;
+ items.forEach((item, i) => {
+ item.style.display = (i >= start && i < end) ? '' : 'none';
+ });
+ renderControls();
+ if (options.scrollTo) {
+ const el = document.querySelector(options.scrollTo);
+ if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+ }
+ }
+
+ function renderControls() {
+ let html = '';
+ html += `<button onclick="window['${ctrlName}'].goTo(1)" ${currentPage === 1 ? 'disabled' : ''}>« 首页</button>`;
+ html += `<button onclick="window['${ctrlName}'].goTo(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>‹ 上一页</button>`;
+
+ const maxButtons = 7;
+ let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+ let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+ if (endPage - startPage < maxButtons - 1) {
+ startPage = Math.max(1, endPage - maxButtons + 1);
+ }
+
+ if (startPage > 1) {
+ html += `<button onclick="window['${ctrlName}'].goTo(1)">1</button>`;
+ if (startPage > 2) html += `<span class="page-info">...</span>`;
+ }
+
+ for (let p = startPage; p <= endPage; p++) {
+ html += `<button class="${p === currentPage ? 'active' : ''}" onclick="window['${ctrlName}'].goTo(${p})">${p}</button>`;
+ }
+
+ if (endPage < totalPages) {
+ if (endPage < totalPages - 1) html += `<span class="page-info">...</span>`;
+ html += `<button onclick="window['${ctrlName}'].goTo(${totalPages})">${totalPages}</button>`;
+ }
+
+ html += `<button onclick="window['${ctrlName}'].goTo(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页 ›</button>`;
+ html += `<button onclick="window['${ctrlName}'].goTo(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>末页 »</button>`;
+
+ html += `<select onchange="window['${ctrlName}'].setRowsPerPage(this.value)" style="margin-left: 12px;">`;
+ [10, 20, 30, 50, 100].forEach(n => {
+ html += `<option value="${n}" ${n === rowsPerPage ? 'selected' : ''}>${n}条/页</option>`;
+ });
+ html += `</select>`;
+
+ html += `<span class="page-info">共 ${totalRows} 条，${currentPage}/${totalPages} 页</span>`;
+
+ pagContainer.innerHTML = html;
+ }
+
+ const ctrl = {
+ goTo(page) {
+ if (page < 1 || page > totalPages) return;
+ showPage(page);
+ },
+ setRowsPerPage(n) {
+ rowsPerPage = parseInt(n);
+ const newTotalPages = Math.ceil(totalRows / rowsPerPage);
+ showPage(Math.min(currentPage, newTotalPages));
+ pagContainer.querySelectorAll('select').forEach(s => s.value = n);
+ }
+ };
+ window[ctrlName] = ctrl;
+
+ showPage(1);
+ return ctrl;
+ }
+ };
+
+ document.addEventListener('DOMContentLoaded', loadStats);
+
+const currentPath = window.location.pathname;
+document.querySelectorAll('nav a').forEach(function(a) {
+ if (a.getAttribute('href') === currentPath) a.classList.add('active');
+});
+// 单号管理子导航
+const subnav = document.getElementById('subnav');
+const subnavPaths = ['/inbound/records', '/all_orders', '/anonymous', '/lost_packages'];
+if (subnavPaths.includes(currentPath)) {
+ subnav.style.display = 'block';
+ subnav.querySelectorAll('a').forEach(function(a) {
+ if (a.getAttribute('href') === currentPath) {
+ a.style.color = 'var(--accent)';
+ a.style.borderBottomColor = 'var(--accent)';
+ }
+ });
+}
+
+ // 打包记录子导航
+const subnavPacked = document.getElementById('subnav-packed');
+const packedPaths = ['/packed_records', '/vip/packed'];
+if (subnavPacked && packedPaths.includes(currentPath)) {
+ subnavPacked.style.display = 'block';
+ const currentSearch = window.location.search || '';
+ subnavPacked.querySelectorAll('a').forEach(function(a) {
+ const href = a.getAttribute('href') || '';
+ const match = (href === currentPath) || (href === currentPath + currentSearch);
+ if (match) {
+ a.style.color = 'var(--accent)';
+ a.style.borderBottomColor = 'var(--accent)';
+ a.style.fontWeight = '600';
+ }
+ });
+ }
+
+// 客户管理子导航
+const subnavCust = document.getElementById('subnav-customers');
+const rawSearch = (window.location.search || '');
+// 只保留 vip/group 参数，搜索关键字相关参数都丢掉以保证子导航显示
+const custParams = new URLSearchParams(rawSearch);
+custParams.delete('search');
+custParams.delete('group');
+const cleanedSearch = custParams.toString();
+const cleanedSuffix = cleanedSearch ? (rawSearch.startsWith('?') && rawSearch.split('&')[0] && !rawSearch.split('&')[0].includes('search=') && !rawSearch.split('&')[0].includes('group=') ? '?' + cleanedSearch : '?' + cleanedSearch) : '';
+const custPath = currentPath + cleanedSuffix;
+const custPaths = ['/customers', '/customers?vip=1', '/customers?', '/address_book'];
+if (subnavCust && (custPaths.includes(custPath) || custPath.startsWith('/customers'))) {
+ subnavCust.style.display = 'block';
+ subnavCust.querySelectorAll('a').forEach(function(a) {
+ const href = a.getAttribute('href');
+ if ((href === custPath) ||
+ (href === '/customers' && custPath.startsWith('/customers?')) ||
+ (href === '/customers?vip=1' && custPath.startsWith('/customers?vip=1&'))) {
+ a.style.color = 'var(--accent)';
+ a.style.borderBottomColor = 'var(--accent)';
+ }
+ });
+}
+
+ // ===== 常用尺寸预设管理（localStorage） =====
+ window.SizePresets = {
+ STORAGE_KEY: 'consolidation_size_presets',
+ DEFAULTS: [
+ { name: '30×20×15', l: 30, w: 20, h: 15 },
+ { name: '40×30×20', l: 40, w: 30, h: 20 },
+ { name: '50×40×30', l: 50, w: 40, h: 30 },
+ { name: '60×45×35', l: 60, w: 45, h: 35 },
+ { name: '70×50×40', l: 70, w: 50, h: 40 },
+ { name: '80×60×50', l: 80, w: 60, h: 50 }
+ ],
+
+ getAll: function() {
+ try {
+ const raw = localStorage.getItem(this.STORAGE_KEY);
+ if (raw) {
+ const parsed = JSON.parse(raw);
+ if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+ }
+ } catch (e) { /* ignore */ }
+ return this.DEFAULTS.slice();
+ },
+
+ save: function(presets) {
+ localStorage.setItem(this.STORAGE_KEY, JSON.stringify(presets));
+ },
+
+ add: function(name, l, w, h) {
+ const presets = this.getAll();
+ presets.push({ name: name, l: l, w: w, h: h });
+ this.save(presets);
+ return presets;
+ },
+
+ remove: function(index) {
+ const presets = this.getAll();
+ if (index >= 0 && index < presets.length) {
+ presets.splice(index, 1);
+ this.save(presets);
+ }
+ return presets;
+ },
+
+ reset: function() {
+ localStorage.removeItem(this.STORAGE_KEY);
+ return this.DEFAULTS.slice();
+ },
+
+ // 渲染常用尺寸按钮 + 自定义管理入口
+ // containerId: 按钮容器ID
+ // lengthId, widthId, heightId: 目标输入框ID
+ // onApplied: 可选回调，填入后调用（如触发计算）
+ renderButtons: function(containerId, lengthId, widthId, heightId, onApplied) {
+ const container = document.getElementById(containerId);
+ if (!container) return;
+
+ const presets = this.getAll();
+ const self = this;
+
+ let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">' +
+ '<span style="font-size:12px;font-weight:500;color:var(--text-secondary);">常用尺寸：</span>';
+
+ presets.forEach(function(p, i) {
+ html += '<button type="button" class="size-preset-btn" data-idx="' + i +
+ '" style="padding:5px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);cursor:pointer;font-size:12px;white-space:nowrap;transition:all 0.15s;"' +
+ ' onmouseenter="this.style.borderColor=\'var(--accent)\';this.style.background=\'rgba(102,126,234,0.08)\';"' +
+ ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'var(--bg-card)\';"' +
+ '>' + p.name + '</button>';
+ });
+
+ // 自定义管理按钮
+ html += '<button type="button" onclick="SizePresets.openManager(\'' + containerId + '\',\'' + lengthId + '\',\'' + widthId + '\',\'' + heightId + '\')" ' +
+ 'style="padding:5px 8px;border:1px dashed var(--border);border-radius:4px;background:transparent;cursor:pointer;font-size:12px;color:var(--text-muted);" ' +
+ 'title="自定义尺寸"></button></div>';
+
+ container.innerHTML = html;
+
+ // 绑定点击事件
+ container.querySelectorAll('.size-preset-btn').forEach(function(btn) {
+ btn.addEventListener('click', function() {
+ const idx = parseInt(this.dataset.idx);
+ const p = presets[idx];
+ if (!p) return;
+ const lEl = document.getElementById(lengthId);
+ const wEl = document.getElementById(widthId);
+ const hEl = document.getElementById(heightId);
+ if (lEl) lEl.value = p.l;
+ if (wEl) wEl.value = p.w;
+ if (hEl) hEl.value = p.h;
+ if (onApplied) onApplied();
+ // 触发 input 事件（用于联动计算）
+ if (lEl) lEl.dispatchEvent(new Event('input', { bubbles: true }));
+ if (wEl) wEl.dispatchEvent(new Event('input', { bubbles: true }));
+ if (hEl) hEl.dispatchEvent(new Event('input', { bubbles: true }));
+ showToast('已应用尺寸: ' + p.name, 'success');
+ });
+ });
+ },
+
+ // 打开自定义管理弹窗
+ openManager: function(containerId, lengthId, widthId, heightId) {
+ const presets = this.getAll();
+ const self = this;
+
+ let listHtml = '';
+ presets.forEach(function(p, i) {
+ listHtml += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-input);border-radius:6px;margin-bottom:6px;">' +
+ '<span style="font-weight:500;">' + p.name + '</span>' +
+ '<button type="button" class="btn btn-danger" style="padding:3px 8px;font-size:11px;" ' +
+ 'onclick="SizePresets._delAndRefresh(' + i + ',\'' + containerId + '\',\'' + lengthId + '\',\'' + widthId + '\',\'' + heightId + '\')">删除</button>' +
+ '</div>';
+ });
+
+ const modalHtml =
+ '<div class="modal active" id="size-preset-modal">' +
+ '<div class="modal-content" style="max-width:450px;">' +
+ '<div class="modal-title"> 自定义常用尺寸</div>' +
+ '<div style="max-height:300px;overflow-y:auto;margin-bottom:15px;">' + (listHtml || '<div style="color:var(--text-muted);text-align:center;padding:20px;">暂无预设</div>') + '</div>' +
+ '<div style="border-top:1px solid var(--border);padding-top:15px;">' +
+ '<div style="font-size:13px;font-weight:500;margin-bottom:10px;">添加新尺寸</div>' +
+ '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;">' +
+ '<div><label style="font-size:11px;color:var(--text-secondary);">长(cm)</label><input type="number" id="sp-add-l" step="0.1" min="1" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;"></div>' +
+ '<div><label style="font-size:11px;color:var(--text-secondary);">宽(cm)</label><input type="number" id="sp-add-w" step="0.1" min="1" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;"></div>' +
+ '<div><label style="font-size:11px;color:var(--text-secondary);">高(cm)</label><input type="number" id="sp-add-h" step="0.1" min="1" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;"></div>' +
+ '<button type="button" class="btn" onclick="SizePresets._doAdd(\'' + containerId + '\',\'' + lengthId + '\',\'' + widthId + '\',\'' + heightId + '\')" style="padding:7px 14px;font-size:12px;">添加</button>' +
+ '</div></div>' +
+ '<div class="modal-footer" style="justify-content:space-between;">' +
+ '<button class="btn btn-danger" onclick="SizePresets._doReset(\'' + containerId + '\',\'' + lengthId + '\',\'' + widthId + '\',\'' + heightId + '\')">恢复默认</button>' +
+ '<div style="display:flex;gap:8px;">' +
+ '<button class="btn btn-secondary" onclick="SizePresets.closeManager(\'' + containerId + '\',\'' + lengthId + '\',\'' + widthId + '\',\'' + heightId + '\')">关闭</button>' +
+ '</div></div></div></div>';
+
+ document.getElementById('modal-container').innerHTML = modalHtml;
+ },
+
+ _delAndRefresh: function(index, containerId, lengthId, widthId, heightId) {
+ this.remove(index);
+ // 重新打开管理弹窗（刷新列表）
+ this.openManager(containerId, lengthId, widthId, heightId);
+ },
+
+ _doAdd: function(containerId, lengthId, widthId, heightId) {
+ const l = parseFloat(document.getElementById('sp-add-l').value);
+ const w = parseFloat(document.getElementById('sp-add-w').value);
+ const h = parseFloat(document.getElementById('sp-add-h').value);
+ if (!l || !w || !h || l <= 0 || w <= 0 || h <= 0) {
+ showToast('请输入有效的长宽高', 'error');
+ return;
+ }
+ const name = l + '×' + w + '×' + h;
+ this.add(name, l, w, h);
+ // 刷新管理弹窗
+ this.openManager(containerId, lengthId, widthId, heightId);
+ showToast('已添加: ' + name, 'success');
+ },
+
+ _doReset: function(containerId, lengthId, widthId, heightId) {
+ this.reset();
+ this.openManager(containerId, lengthId, widthId, heightId);
+ showToast('已恢复默认尺寸', 'success');
+ },
+
+ closeManager: function(containerId, lengthId, widthId, heightId) {
+ document.getElementById('modal-container').innerHTML = '';
+ // 重新渲染按钮
+ this.renderButtons(containerId, lengthId, widthId, heightId);
+ }
+ };
+ </script>
+
+ <!-- Quagga2 条码识别库 -->
+ <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+
+ <!-- 摄像头扫描模态框 -->
+ <div id="camera-modal">
+ <div style="background: var(--bg-card); border-radius: 16px; padding: 24px; width: 90%; max-width: 580px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+ <h3 style="margin: 0; font-size: 18px;"> 摄像头扫描条码</h3>
+ <button onclick="closeCameraScanner()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); line-height: 1; padding: 4px;"></button>
+ </div>
+ <div id="camera-viewport" style="position: relative; width: 100%; height: 360px; background: #000; border-radius: 12px; overflow: hidden;">
+ <video id="camera-video" style="width: 100%; height: 100%; object-fit: cover;" autoplay playsinline></video>
+ <div id="scan-region" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 95%; height: 220px; border: 5px solid #16a34a; border-radius: 12px; box-shadow: inset 0 0 0 9999px rgba(0,0,0,0.45), 0 0 32px rgba(22,163,74,0.6); pointer-events: none; z-index: 10;">
+ <div id="scan-line" style="position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, transparent, #dc2626, transparent); animation: scanLineAnim 2s ease-in-out infinite;"></div>
+ <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 14px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,0.8); white-space: nowrap;"> 将条码对准扫描框内</div>
+ </div>
+ </div>
+ <div id="camera-status" style="text-align: center; margin-top: 14px; font-size: 14px; color: var(--text-muted);">
+ 将条码对准扫描框…
+ </div>
+ <div style="margin-top: 16px; display: flex; gap: 10px; justify-content: center;">
+ <button onclick="switchCameraScanner()" style="padding: 8px 18px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-primary);">
+ 切换摄像头
+ </button>
+ <button onclick="closeCameraScanner()" style="padding: 8px 18px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-primary);">
+ 关闭
+ </button>
+ </div>
+ </div>
+ </div>
+
+ <!-- 共享摄像头扫描脚本 -->
+ <script>
+ // ========== 摄像头扫描（所有页面共享） ==========
+ window._cameraStream = null;
+ window._cameraFacing = 'environment';
+ window._cameraActive = false;
+ window._quaggaReady = false;
+ window._cameraScanTarget = null;
+ window._cameraScanCallback = null;
+ window._lastScanTime = 0; // 防误扫：上次成功识别时间戳
+
+ async function openCameraScanner(targetInputId, callback) {
+ window._cameraScanTarget = targetInputId;
+ window._cameraScanCallback = callback;
+ window._cameraActive = true;
+
+ const modal = document.getElementById('camera-modal');
+ modal.style.display = 'flex';
+ document.getElementById('camera-status').textContent = '启动摄像头中…';
+ document.getElementById('camera-status').style.color = 'var(--text-muted)';
+
+ await ensureQuaggaLoaded();
+ try {
+ await startCamera(window._cameraFacing);
+ document.getElementById('camera-status').textContent = '将条码对准扫描框…';
+ initQuagga();
+ } catch (err) {
+ document.getElementById('camera-status').textContent = ' 摄像头启动失败，请检查权限';
+ document.getElementById('camera-status').style.color = 'var(--danger)';
+ }
+ }
+
+ function closeCameraScanner() {
+ window._cameraActive = false;
+ stopQuagga();
+ stopCamera();
+ document.getElementById('camera-modal').style.display = 'none';
+ document.getElementById('camera-status').style.color = 'var(--text-muted)';
+ }
+
+ async function ensureQuaggaLoaded() {
+ if (typeof Quagga !== 'undefined') return;
+ return new Promise((resolve, reject) => {
+ let attempts = 0;
+ const check = setInterval(() => {
+ if (typeof Quagga !== 'undefined') { clearInterval(check); resolve(); }
+ else if (attempts++ > 50) { clearInterval(check); reject(new Error('Quagga2 加载超时')); }
+ }, 100);
+ });
+ }
+
+ async function startCamera(facingMode) {
+ stopCamera();
+ const video = document.getElementById('camera-video');
+ try {
+ window._cameraStream = await navigator.mediaDevices.getUserMedia({
+ video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+ audio: false
+ });
+ } catch (e) {
+ window._cameraStream = await navigator.mediaDevices.getUserMedia({
+ video: { facingMode: 'environment' },
+ audio: false
+ });
+ }
+ video.srcObject = window._cameraStream;
+ await video.play();
+ }
+
+ function stopCamera() {
+ if (window._cameraStream) {
+ window._cameraStream.getTracks().forEach(t => t.stop());
+ window._cameraStream = null;
+ }
+ }
+
+ async function switchCameraScanner() {
+ window._cameraFacing = window._cameraFacing === 'environment' ? 'user' : 'environment';
+ stopQuagga();
+ try {
+ await startCamera(window._cameraFacing);
+ document.getElementById('camera-status').textContent = '将条码对准扫描框…';
+ initQuagga();
+ } catch (err) {
+ document.getElementById('camera-status').textContent = ' 切换失败';
+ }
+ }
+
+ function initQuagga() {
+ if (!window._cameraActive) return;
+ if (window._quaggaReady) { try { Quagga.stop(); } catch(e) {} }
+
+ const video = document.getElementById('camera-video');
+ Quagga.init({
+ inputStream: {
+ name: "Live", type: "LiveStream", target: video,
+ constraints: { width: { min: 640 }, height: { min: 480 }, facingMode: window._cameraFacing }
+ },
+ locator: { patchSize: "medium", halfSample: true },
+ numOfWorkers: 2,
+ decoder: { readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "upc_reader"] },
+ locate: true
+ }, function(err) {
+ if (err) { fallbackCameraScan(); return; }
+ window._quaggaReady = true;
+ Quagga.start();
+ });
+ Quagga.onDetected(handleCameraDetect);
+ }
+
+ function handleCameraDetect(result) {
+ if (!window._cameraActive) return;
+ const code = result.codeResult.code;
+ if (!code) return;
+ const cleaned = code.replace(/[\x00-\x1f\x7f]/g, '').trim().toUpperCase();
+ if (cleaned.length < 3) return;
+
+ // 防误扫：1.5 秒冷却，同一帧连续触发时忽略
+ const now = Date.now();
+ if (now - window._lastScanTime < 1500) return;
+ window._lastScanTime = now;
+
+ window._cameraActive = false;
+ stopQuagga();
+ stopCamera();
+
+ document.getElementById('camera-status').textContent = ' 识别成功: ' + cleaned;
+ document.getElementById('camera-status').style.color = 'var(--success)';
+
+ // 填入目标输入框
+ const input = document.getElementById(window._cameraScanTarget);
+ if (input) {
+ input.value = cleaned;
+ input.dispatchEvent(new Event('input', { bubbles: true }));
+ }
+
+ // 执行页面回调
+ setTimeout(() => {
+ closeCameraScanner();
+ if (window._cameraScanCallback) window._cameraScanCallback(cleaned);
+ }, 300);
+ }
+
+ function stopQuagga() {
+ if (window._quaggaReady) {
+ try { Quagga.offDetected(handleCameraDetect); Quagga.stop(); } catch(e) {}
+ window._quaggaReady = false;
+ }
+ }
+
+ // ========== 备用：定时截图识别 ==========
+ let _fallbackTimer = null;
+ function fallbackCameraScan() {
+ if (_fallbackTimer) clearInterval(_fallbackTimer);
+ document.getElementById('camera-status').textContent = ' 引擎加载中，尝试备用方案…';
+ const video = document.getElementById('camera-video');
+ const canvas = document.createElement('canvas');
+ _fallbackTimer = setInterval(() => {
+ if (!window._cameraActive) { clearInterval(_fallbackTimer); return; }
+ canvas.width = video.videoWidth || 640;
+ canvas.height = video.videoHeight || 480;
+ const ctx = canvas.getContext('2d');
+ ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+ try {
+ Quagga.decodeSingle({
+ src: canvas.toDataURL(),
+ numOfWorkers: 1,
+ decoder: { readers: ["code_128_reader", "ean_reader", "code_39_reader"] }
+ }, function(r) {
+ if (r && r.codeResult && window._cameraActive) {
+ handleCameraDetect(r);
+ clearInterval(_fallbackTimer);
+ }
+ });
+ } catch(e) {}
+ }, 1000);
+ }
+
+ // 模态框外围点击关闭
+ document.addEventListener('click', function(e) { if (e.target.id === 'camera-modal') closeCameraScanner(); });
+ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeCameraScanner(); });
+ </script>
+</body>
+</html>

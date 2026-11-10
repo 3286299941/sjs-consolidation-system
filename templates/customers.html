@@ -1,0 +1,796 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<!-- ===== Ctrl+F 查找栏 ===== -->
+<div id="find-bar" style="display:none; position:fixed; top:60px; right:20px; z-index:9999;
+ background: var(--bg-card); border:1px solid var(--accent); border-radius:10px;
+ box-shadow:0 4px 24px rgba(102,126,234,0.18); padding:10px 14px;
+ display:none; align-items:center; gap:8px; min-width:320px;">
+ <span style="color: var(--accent-hover); font-size:14px; font-weight:600;"> 查找</span>
+ <input id="find-input" type="text" placeholder="输入关键字..."
+ style="flex:1; border:1px solid var(--border); border-radius:6px; padding:5px 10px; font-size:14px; outline:none;"
+ oninput="doFind()" onkeydown="findKeyNav(event)">
+ <span id="find-count" style="font-size:12px; color: var(--text-muted); white-space:nowrap;"></span>
+ <button onclick="findNav(-1)" style="padding:3px 9px; border:1px solid var(--border); border-radius:5px; cursor:pointer; background: var(--bg-input);" title="上一个">↑</button>
+ <button onclick="findNav(1)" style="padding:3px 9px; border:1px solid var(--border); border-radius:5px; cursor:pointer; background: var(--bg-input);" title="下一个">↓</button>
+ <button onclick="closeFindBar()" style="padding:3px 9px; border:1px solid #fca5a5; border-radius:5px; cursor:pointer; background:#fef2f2; color:#dc2626;" title="关闭"></button>
+</div>
+
+<div class="card">
+ <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+ <span>客户列表</span>
+ <div style="display:flex; gap:8px; align-items:center;">
+ <!-- 分组切换 -->
+ <a href="{% if vip_only %}/customers?vip=1&group={{ '0' if group_by_zip else '1' }}&search={{ search_key }}{% else %}/customers?group={{ '0' if group_by_zip else '1' }}&search={{ search_key }}{% endif %}"
+ class="btn btn-secondary" style="padding:6px 14px; font-size:13px;">
+ {% if group_by_zip %} 取消分组{% else %} 按邮编分组{% endif %}
+ </a>
+ <button class="btn btn-secondary" onclick="openFindBar()" title="Ctrl+F 快捷查找"> 查找</button>
+ <button class="btn btn-secondary" onclick="showImportModal()">批量导入</button>
+ <button class="btn" onclick="showAddModal()">添加客户</button>
+ </div>
+ </div>
+
+ <!-- 服务端搜索框 -->
+ <div class="search-box" style="margin-bottom:14px;">
+ <input type="text" id="search-input" placeholder="搜索客户姓名、编号、条码、地址或邮编..." value="{{ search_key }}" onkeyup="handleSearch(event)">
+ <button class="btn" onclick="doSearch()">搜索</button>
+ {% if search_key %}
+ <button class="btn btn-secondary" onclick="window.location.href='{% if vip_only %}/customers?vip=1{% else %}/customers{% endif %}'">清除搜索</button>
+ {% endif %}
+ </div>
+
+ {% if group_by_zip and zip_groups %}
+ <!-- ===== 按邮编分组显示 ===== -->
+ {% for zip_code, group_customers in zip_groups %}
+ <div class="zip-group" style="margin-bottom:20px;">
+ <!-- 邮编分组标题 -->
+ <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; cursor:pointer;"
+ onclick="toggleGroup('zip-{{ loop.index }}')">
+ <div style="background: {% if zip_code == '无邮编' %}#f3f4f6{% else %}#ede9fe{% endif %};
+ color: {% if zip_code == '无邮编' %}#6b7280{% else %}#7c3aed{% endif %};
+ border-radius:6px; padding:5px 14px; font-weight:700; font-size:15px; letter-spacing:1px;">
+ {{ zip_code }}
+ </div>
+ <span style="color: var(--text-muted); font-size:13px;">{{ group_customers|length }} 位客户</span>
+ <span style="color: var(--accent-hover); font-size:12px;">
+ {% set total_pending = namespace(v=0) %}
+ {% for c in group_customers %}{% set total_pending.v = total_pending.v + c.pending_count %}{% endfor %}
+ {% if total_pending.v > 0 %}<span class="badge badge-danger">待发 {{ total_pending.v }} 件</span>{% endif %}
+ </span>
+ <span id="arrow-zip-{{ loop.index }}" style="margin-left:auto; color:#aaa; font-size:12px;">▼ 收起</span>
+ </div>
+
+ <div id="zip-{{ loop.index }}">
+ <table style="margin-bottom:0;">
+ <thead>
+ <tr>
+ <th><input type="checkbox" onchange="toggleGroupSelect(this, 'zip-{{ loop.index }}')"></th>
+ <th>序号</th>
+ {% if vip_only %}
+ <th>收货人姓名</th>
+ {% else %}
+ <th>客户姓名</th>
+ {% endif %}
+ <th>条码</th>
+ {% if vip_only %}
+ <th>派送地址</th>
+ {% else %}
+ <th>收货地址</th>
+ {% endif %}
+ <th>邮编</th>
+ <th>发货次数</th>
+ <th>待发包裹</th>
+ <th>创建时间</th>
+ <th>操作</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for customer in group_customers %}
+ <tr class="customer-row" data-search="{{ customer.name }}|{{ customer.customer_no }}|{{ customer.barcode }}|{{ customer.address }}|{{ customer.zip_code }}">
+ <td><input type="checkbox" class="customer-check" value="{{ customer.id }}" onchange="updateBatchActions()"></td>
+ <td>{{ loop.index }}</td>
+ {% if vip_only %}
+ <td><strong>{{ customer.name }}</strong><span class="badge badge-warning" style="background:#9333ea;color:#fff;margin-left:6px;">VIP</span></td>
+ {% else %}
+ <td><strong>{{ customer.name }}</strong>{% if customer.is_vip %}<span class="badge badge-warning" style="background:#9333ea;color:#fff;margin-left:6px;">VIP</span>{% endif %}</td>
+ {% endif %}
+ <td><code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;display:block;">{{ customer.barcode }}</code></td>
+ {% if vip_only %}
+ <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{ customer.invoice_address or customer.address }}</td>
+ {% else %}
+ <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{ customer.address }}</td>
+ {% endif %}
+ <td>{{ customer.zip_code or '-' }}</td>
+ <td><span class="badge badge-success">{{ customer.shipment_count or 0 }} 次</span></td>
+ <td>
+ {% if customer.pending_count > 0 %}
+ <span class="badge badge-danger">{{ customer.pending_count }} 件</span>
+ {% else %}
+ <span class="badge badge-success">0 件</span>
+ {% endif %}
+ </td>
+ <td>{{ customer.created_at.strftime('%Y-%m-%d') }}</td>
+ <td>
+ <button class="btn btn-secondary" onclick="printCustomerLabel({{ customer.id }})" style="padding:4px 8px;font-size:12px;">打印</button>
+ <button class="btn btn-secondary" onclick="editCustomer({{ customer.id }})" style="padding:4px 8px;font-size:12px;">编辑</button>
+ <button class="btn btn-danger" onclick="deleteCustomer({{ customer.id }}, '{{ customer.name }}')" style="padding:4px 8px;font-size:12px;">删除</button>
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+ </div>
+ {% endfor %}
+
+ {% elif customers %}
+ <!-- ===== 不分组普通列表 ===== -->
+ <table>
+ <thead>
+ <tr>
+ <th><input type="checkbox" id="select-all" onchange="toggleSelectAll()"></th>
+ <th>序号</th>
+ {% if vip_only %}
+ <th>收货人姓名</th>
+ {% else %}
+ <th>客户姓名</th>
+ {% endif %}
+ <th>条码</th>
+ {% if vip_only %}
+ <th>派送地址</th>
+ {% else %}
+ <th>收货地址</th>
+ {% endif %}
+ <th>邮编</th>
+ <th>发货次数</th>
+ <th>待发包裹</th>
+ <th>创建时间</th>
+ <th>操作</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for customer in customers %}
+ <tr class="customer-row" data-search="{{ customer.name }}|{{ customer.customer_no }}|{{ customer.barcode }}|{{ customer.address }}|{{ customer.zip_code }}">
+ <td><input type="checkbox" class="customer-check" value="{{ customer.id }}" onchange="updateBatchActions()"></td>
+ <td>{{ loop.index }}</td>
+ {% if vip_only %}
+ <td><strong>{{ customer.name }}</strong><span class="badge badge-warning" style="background:#9333ea;color:#fff;margin-left:6px;">VIP</span></td>
+ {% else %}
+ <td><strong>{{ customer.name }}</strong>{% if customer.is_vip %}<span class="badge badge-warning" style="background:#9333ea;color:#fff;margin-left:6px;">VIP</span>{% endif %}</td>
+ {% endif %}
+ <td><code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;display:block;">{{ customer.barcode }}</code></td>
+ {% if vip_only %}
+ <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{ customer.invoice_address or customer.address }}</td>
+ {% else %}
+ <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{ customer.address }}</td>
+ {% endif %}
+ <td>{{ customer.zip_code or '-' }}</td>
+ <td><span class="badge badge-success">{{ customer.shipment_count or 0 }} 次</span></td>
+ <td>
+ {% if customer.pending_count > 0 %}
+ <span class="badge badge-danger">{{ customer.pending_count }} 件</span>
+ {% else %}
+ <span class="badge badge-success">0 件</span>
+ {% endif %}
+ </td>
+ <td>{{ customer.created_at.strftime('%Y-%m-%d') }}</td>
+ <td>
+ <button class="btn btn-secondary" onclick="printCustomerLabel({{ customer.id }})" title="打印客户面单" style="padding:5px 10px;font-size:12px;">打印</button>
+ <button class="btn btn-secondary" onclick="viewCustomer({{ customer.id }})" style="padding:5px 10px;font-size:12px;">详情</button>
+ <button class="btn btn-secondary" onclick="editCustomer({{ customer.id }})" style="padding:5px 10px;font-size:12px;">编辑</button>
+ <button class="btn btn-danger" onclick="deleteCustomer({{ customer.id }}, '{{ customer.name }}')" style="padding:5px 10px;font-size:12px;">删除</button>
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ {% else %}
+ <div class="empty-state">
+ <p>暂无客户数据</p>
+ <button class="btn" onclick="showAddModal()" style="margin-top:15px;">添加第一个客户</button>
+ </div>
+ {% endif %}
+
+ <!-- 批量操作栏 -->
+ <div id="batch-actions" style="display:none; margin-top:15px; padding:15px; background:#f0f9ff; border-radius:8px; border:1px solid #bbf7d0;">
+ <span style="font-weight:bold; color:#166534;">已选择 <span id="selected-count">0</span> 个客户</span>
+ <button class="btn" onclick="batchPrintLabels()" style="margin-left:15px;">批量打印面单</button>
+ <button class="btn" onclick="batchDownloadPdf()" style="margin-left:5px;background:#2563eb;color:#fff;">批量下载PDF</button>
+ </div>
+</div>
+
+<script>
+const pageVipOnly = {{ 'true' if vip_only else 'false' }};
+const normalCustomers = {{ normal_customers | tojson }};
+
+/* ========== 分组折叠 ========== */
+function toggleGroup(id) {
+ const el = document.getElementById(id);
+ const idx = id.replace('zip-','');
+ const arrow = document.getElementById('arrow-' + id);
+ if (el.style.display === 'none') {
+ el.style.display = '';
+ if (arrow) arrow.textContent = '▼ 收起';
+ } else {
+ el.style.display = 'none';
+ if (arrow) arrow.textContent = '▶ 展开';
+ }
+}
+
+function toggleGroupSelect(cb, groupId) {
+ const groupEl = document.getElementById(groupId);
+ if (!groupEl) return;
+ groupEl.querySelectorAll('.customer-check').forEach(c => {
+ c.checked = cb.checked;
+ });
+ updateBatchActions();
+}
+
+/* ========== Ctrl+F 查找功能 ========== */
+let findResults = [];
+let findIdx = -1;
+
+document.addEventListener('keydown', function(e) {
+ if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+ e.preventDefault();
+ openFindBar();
+ }
+ if (e.key === 'Escape') closeFindBar();
+});
+
+function openFindBar() {
+ const bar = document.getElementById('find-bar');
+ bar.style.display = 'flex';
+ document.getElementById('find-input').focus();
+ document.getElementById('find-input').select();
+}
+
+function closeFindBar() {
+ document.getElementById('find-bar').style.display = 'none';
+ clearHighlights();
+ findResults = [];
+ findIdx = -1;
+ document.getElementById('find-count').textContent = '';
+}
+
+function doFind() {
+ clearHighlights();
+ findResults = [];
+ findIdx = -1;
+ const kw = document.getElementById('find-input').value.trim().toLowerCase();
+ if (!kw) {
+ document.getElementById('find-count').textContent = '';
+ return;
+ }
+
+ document.querySelectorAll('.customer-row').forEach(row => {
+ const text = (row.dataset.search || '').toLowerCase();
+ if (text.includes(kw)) {
+ row.style.background = '#fffbeb';
+ row.style.outline = '2px solid #fbbf24';
+ findResults.push(row);
+ }
+ });
+
+ if (findResults.length > 0) {
+ findIdx = 0;
+ scrollToResult(0);
+ document.getElementById('find-count').textContent = `1 / ${findResults.length}`;
+ } else {
+ document.getElementById('find-count').textContent = '无结果';
+ }
+}
+
+function findNav(dir) {
+ if (findResults.length === 0) return;
+ findResults[findIdx].style.outline = '2px solid #fbbf24';
+ findIdx = (findIdx + dir + findResults.length) % findResults.length;
+ scrollToResult(findIdx);
+ document.getElementById('find-count').textContent = `${findIdx + 1} / ${findResults.length}`;
+}
+
+function findKeyNav(e) {
+ if (e.key === 'Enter') {
+ if (e.shiftKey) findNav(-1);
+ else findNav(1);
+ }
+ if (e.key === 'Escape') closeFindBar();
+}
+
+function scrollToResult(idx) {
+ const row = findResults[idx];
+ row.style.outline = '2px solid #06b6d4';
+ row.style.background = '#eef2ff';
+ row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+ // 如果在折叠组里，先展开
+ let parent = row.parentElement;
+ while (parent) {
+ if (parent.id && parent.id.startsWith('zip-')) {
+ parent.style.display = '';
+ const arrow = document.getElementById('arrow-' + parent.id);
+ if (arrow) arrow.textContent = '▼ 收起';
+ }
+ parent = parent.parentElement;
+ }
+}
+
+function clearHighlights() {
+ document.querySelectorAll('.customer-row').forEach(row => {
+ row.style.background = '';
+ row.style.outline = '';
+ });
+}
+
+/* ========== 服务端搜索 ========== */
+function handleSearch(event) {
+ if (event.key === 'Enter') doSearch();
+}
+
+function doSearch() {
+ const keyword = document.getElementById('search-input').value.trim();
+ const groupParam = '{{ "1" if group_by_zip else "0" }}';
+ const baseUrl = pageVipOnly ? '/customers?vip=1' : '/customers';
+ const sep = pageVipOnly ? '&' : '?';
+ if (keyword) {
+ window.location.href = `${baseUrl}${sep}search=${encodeURIComponent(keyword)}&group=${groupParam}`;
+ } else {
+ window.location.href = `${baseUrl}${sep}group=${groupParam}`;
+ }
+}
+
+function goToPack(customerId) {
+ window.location.href = `/pack/${customerId}`;
+}
+
+/* ========== 全选/批量 ========== */
+function toggleSelectAll() {
+ const checked = document.getElementById('select-all').checked;
+ document.querySelectorAll('.customer-check').forEach(cb => cb.checked = checked);
+ updateBatchActions();
+}
+
+function updateBatchActions() {
+ const selected = document.querySelectorAll('.customer-check:checked');
+ const count = selected.length;
+ document.getElementById('selected-count').textContent = count;
+ document.getElementById('batch-actions').style.display = count > 0 ? 'block' : 'none';
+}
+
+function batchPrintLabels() {
+ const selected = document.querySelectorAll('.customer-check:checked');
+ const ids = Array.from(selected).map(cb => cb.value);
+ if (ids.length === 0) { showToast('请先选择客户', 'error'); return; }
+ window.open(`/print_customers?ids=${ids.join(',')}`, '_blank', 'width=420,height=640,toolbar=0,scrollbars=0,status=0');
+}
+
+function batchDownloadPdf() {
+ const selected = document.querySelectorAll('.customer-check:checked');
+ const ids = Array.from(selected).map(cb => cb.value);
+ if (ids.length === 0) { showToast('请先选择客户', 'error'); return; }
+ window.open(`/pdf/print_customers?ids=${ids.join(',')}`, '_blank');
+}
+
+/* ========== 添加/编辑客户 ========== */
+function showAddModal(customer = null) {
+ const title = customer ? '编辑客户' : (pageVipOnly ? '添加单独地址客户' : '添加客户');
+ const isEdit = !!customer;
+ const isVip = customer?.is_vip || pageVipOnly;
+
+ let content = '';
+ if (pageVipOnly && !isEdit) {
+    // 单独地址客户添加表单
+    let nameField = `
+    <div style="position:relative;">
+    <input type="text" id="vip-customer-name" name="name" required autocomplete="off" placeholder="请输入客户名，可输入搜索并选择"
+    oninput="filterVipCustomers(this)"
+    onfocus="showVipCustomerDropdown()"
+    onblur="hideVipCustomerDropdownDelayed()"
+    onkeydown="navigateVipCustomerDropdown(event)"
+    style="width:100%;">
+    <div id="vip-customer-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; max-height:200px; overflow-y:auto; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+    </div>
+    </div>
+    <div style="margin-top:4px; font-size:12px; color: var(--text-muted);">输入内容可搜索普通客户，选择后自动填充；不选择则新增客户</div>
+    `;
+
+    content = `
+    <form id="customer-form">
+    <input type="hidden" name="id" value="">
+    <input type="hidden" name="existing_customer_id" id="vip-existing-id" value="">
+    <input type="hidden" name="is_vip" value="true">
+    <div class="form-group">
+    <label>客户名 *</label>
+    ${nameField}
+    </div>
+    <div class="form-group">
+    <label>收货人姓名 *</label>
+    <input type="text" name="invoice_contact" id="vip-consignee" required placeholder="请输入收货人姓名">
+    </div>
+    <div class="form-group">
+    <label>联系方式 *</label>
+    <input type="text" name="phone" id="vip-phone" required placeholder="电话号码">
+    </div>
+    <div class="form-group">
+    <label>派送地址 *</label>
+    <textarea name="invoice_address" id="vip-address" rows="2" required placeholder="请输入派送地址"></textarea>
+    </div>
+    <div class="form-group">
+    <label>邮编 *</label>
+    <input type="text" name="zip_code" id="vip-zip" required placeholder="如 90210">
+    </div>
+    <div class="form-group">
+    <label>发票邮编</label>
+    <input type="text" name="invoice_zip" id="vip-invoice-zip" placeholder="选填，发票模板B15">
+    </div>
+    <div class="form-group">
+    <label>公司名</label>
+    <input type="text" name="company_name" id="vip-company" placeholder="选填">
+    </div>
+    <div class="form-group">
+    <label>国家</label>
+    <input type="text" name="country" id="vip-country" placeholder="选填，如 United States">
+    </div>
+    </form>
+    `;
+ } else {
+ // 普通表单
+ content = `
+ <form id="customer-form">
+ <input type="hidden" name="id" value="${customer?.id || ''}">
+ <div class="form-group">
+ <label>客户姓名 *</label>
+ <input type="text" name="name" value="${customer?.name || ''}" required placeholder="请输入客户姓名">
+ </div>
+ ${isEdit ? '' : `
+ <div class="form-group">
+ <label>条码/条形码</label>
+ <input type="text" name="barcode" value="${customer?.barcode || ''}" placeholder="留空自动生成">
+ <small style="color: var(--text-muted);">留空将自动生成唯一条码</small>
+ </div>
+ `}
+ <div class="form-group">
+ <label>收货地址 *</label>
+ <textarea name="address" rows="2" required placeholder="请输入收货地址">${customer?.address || ''}</textarea>
+ </div>
+ <div class="form-group">
+ <label>邮编</label>
+ <input type="text" name="zip_code" value="${customer?.zip_code || ''}" placeholder="美国邮政编码(5位)">
+ </div>
+ ${isEdit ? '' : `
+ <div class="form-group">
+ <label>备注</label>
+ <textarea name="remark" rows="2" placeholder="备注信息">${customer?.remark || ''}</textarea>
+ </div>
+ `}
+ ${isEdit ? `
+ <hr style="margin:15px 0;border-color:var(--border-color);">
+ <div class="form-group">
+ <label style="display:flex;align-items:center;gap:8px;">
+ <input type="checkbox" name="is_vip" value="true" ${customer?.is_vip ? 'checked' : ''} onchange="toggleVipFields(this)">
+ <span style="color:#9333ea;font-weight:bold;">VIP客户（可单独发货）</span>
+ </label>
+ </div>
+ <div id="vip-fields" style="display:${isVip ? 'block' : 'none'};background:#faf5ff;padding:12px;border-radius:8px;border:1px solid #e9d5ff;">
+ <div class="form-group">
+ <label>客户电话</label>
+ <input type="text" name="phone" value="${customer?.phone || ''}" placeholder="如 310-555-0101">
+ </div>
+<div class="form-group">
+<label>收货人姓名</label>
+<input type="text" name="invoice_contact" value="${customer?.invoice_contact || ''}" placeholder="收货人姓名，覆盖发票模板B11">
+</div>
+ <div class="form-group">
+ <label>发票联系电话</label>
+ <input type="text" name="invoice_phone" value="${customer?.invoice_phone || ''}" placeholder="覆盖发票模板B12">
+ </div>
+ <div class="form-group">
+ <label>发票地址</label>
+ <input type="text" name="invoice_address" value="${customer?.invoice_address || ''}" placeholder="覆盖发票模板B16">
+ </div>
+ <div class="form-group">
+ <label>发票邮编</label>
+ <input type="text" name="invoice_zip" value="${customer?.invoice_zip || ''}" placeholder="选填，覆盖发票模板B15">
+ </div>
+ <div class="form-group">
+ <label>公司名</label>
+ <input type="text" name="company_name" value="${customer?.company_name || ''}" placeholder="选填">
+ </div>
+ <div class="form-group">
+ <label>国家</label>
+ <input type="text" name="country" value="${customer?.country || ''}" placeholder="选填，如 United States">
+ </div>
+ </div>
+ ` : ''}
+ </form>
+ `;
+ }
+
+ showModal(title, content, async () => {
+ const form = document.getElementById('customer-form');
+ const formData = new FormData(form);
+ const data = Object.fromEntries(formData);
+ try {
+ if (isEdit) {
+ const result = await apiRequest(`/api/customer/update/${customer.id}`, { method:'POST', body:JSON.stringify(data) });
+ showToast(result.message, 'success');
+ window.location.reload();
+ } else if (pageVipOnly && data.existing_customer_id) {
+ // 将现有普通客户转为单独地址客户
+ // 保留原客户信息，不覆盖 address/zip_code
+ const orig = (normalCustomers || []).find(function(x) { return x.id == data.existing_customer_id; }) || {};
+ const updateData = {
+ is_vip: true,
+ name: orig.name || data.name,
+ address: orig.address || '',
+ zip_code: orig.zip_code || '',
+ phone: data.phone,
+ invoice_contact: data.invoice_contact,
+ invoice_address: data.invoice_address,
+ company_name: data.company_name || '',
+ country: data.country || ''
+ };
+ const result = await apiRequest(`/api/customer/update/${data.existing_customer_id}`, { method:'POST', body:JSON.stringify(updateData) });
+ showToast(result.message, 'success');
+ window.location.reload();
+ } else {
+ const result = await apiRequest('/api/customer/add', { method:'POST', body:JSON.stringify(data) });
+ showToast(result.message, 'success');
+ window.location.reload();
+ }
+ } catch (e) {}
+ });
+}
+
+async function editCustomer(id) {
+ try {
+ const result = await apiRequest(`/api/customer/${id}`);
+ showAddModal(result);
+ } catch (e) {}
+}
+
+async function viewCustomer(id) {
+ try {
+ const result = await apiRequest(`/api/customer/${id}`);
+ const content = `
+ <div style="line-height:2;">
+ <p><strong>客户编号:</strong> ${result.customer_no}</p>
+ <p><strong>客户姓名:</strong> ${result.name}</p>
+ <p><strong>条码:</strong> <code>${result.barcode}</code></p>
+ <p><strong>收货地址:</strong> ${result.address}</p>
+ <p><strong>邮编:</strong> ${result.zip_code || '-'}</p>
+ <p><strong>发货次数:</strong> ${result.shipment_count || 0} 次</p>
+ <p><strong>待付运费:</strong> ¥${(result.pending_freight || 0).toFixed(2)}</p>
+ <p><strong>创建时间:</strong> ${result.created_at}</p>
+ ${result.remark ? `<p><strong>备注:</strong> ${result.remark}</p>` : ''}
+ </div>
+ <div style="margin-top:15px; display:flex; gap:10px;">
+ <button class="btn" onclick="printCustomerLabel(${result.id})">打印面单</button>
+ <button class="btn" onclick="downloadCustomerPdf(${result.id})" style="background:#2563eb;color:#fff;">下载PDF</button>
+ <button class="btn btn-secondary" onclick="closeModal(); editCustomer(${result.id});">编辑信息</button>
+ </div>
+ `;
+ showModal('客户详情', content, null);
+ } catch (e) {}
+}
+
+async function deleteCustomer(id, name) {
+ confirmDelete(`确定要删除客户 "<strong>${name}</strong>" 吗？<br>该客户的所有入库和打包记录将一并删除。`, async () => {
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest(`/api/customer/delete/${id}`, { method:'POST' });
+ showToast(result.message, 'success');
+ window.location.reload();
+ } catch (e) {
+ showToast(e.message || '删除失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+}
+
+function printCustomerLabel(id) {
+ window.open(`/print_customer/${id}`, '_blank', 'width=420,height=640,toolbar=0,scrollbars=0,status=0');
+}
+
+function downloadCustomerPdf(id) {
+ window.open(`/pdf/print_customer/${id}`, '_blank');
+}
+
+/* ========== HTML 转义辅助 ========== */
+function escHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ========== VIP 客户名自动补全 ========== */
+let vipCustomerDropdownIndex = -1;
+
+function getVipCustomerDropdown() {
+    return document.getElementById('vip-customer-dropdown');
+}
+
+function getVipCustomerNameInput() {
+    return document.getElementById('vip-customer-name');
+}
+
+function renderVipCustomerOptions(items) {
+    const dropdown = getVipCustomerDropdown();
+    if (!items.length) {
+        dropdown.innerHTML = '<div style="padding:8px 12px; color: var(--text-muted); font-size:13px;">无匹配客户</div>';
+        dropdown.style.display = 'block';
+        return;
+    }
+    dropdown.innerHTML = items.map(function(c, idx) {
+        return '<div class="vip-customer-option" data-index="' + idx + '" data-id="' + c.id + '" data-name="' + escHtml(c.name) + '" data-phone="' + escHtml(c.phone || '') + '" data-address="' + escHtml(c.address || '') + '" data-zip="' + escHtml(c.zip_code || '') + '" data-company="' + escHtml(c.company_name || '') + '" data-country="' + escHtml(c.country || '') + '" data-invoice-contact="' + escHtml(c.invoice_contact || '') + '" style="padding:8px 12px; cursor:pointer; font-size:14px;" onmousedown="event.preventDefault(); selectVipCustomer(' + c.id + ');" onmouseover="highlightVipCustomerOption(' + idx + ')">' + escHtml(c.name) + '</div>';
+    }).join('');
+    dropdown.style.display = 'block';
+    vipCustomerDropdownIndex = -1;
+}
+
+function showVipCustomerDropdown() {
+    const input = getVipCustomerNameInput();
+    const keyword = (input.value || '').trim().toLowerCase();
+    if (!keyword) {
+        renderVipCustomerOptions(normalCustomers || []);
+        return;
+    }
+    const filtered = (normalCustomers || []).filter(function(c) {
+        return (c.name || '').toLowerCase().indexOf(keyword) !== -1;
+    });
+    renderVipCustomerOptions(filtered);
+}
+
+function hideVipCustomerDropdownDelayed() {
+    setTimeout(function() {
+        const dropdown = getVipCustomerDropdown();
+        if (dropdown) dropdown.style.display = 'none';
+    }, 150);
+}
+
+function filterVipCustomers(input) {
+    const keyword = (input.value || '').trim().toLowerCase();
+    // 用户输入变化时，清空已选择的客户ID，只有点选后才重新设置
+    const existingIdEl = document.getElementById('vip-existing-id');
+    if (existingIdEl) existingIdEl.value = '';
+    if (!keyword) {
+        renderVipCustomerOptions(normalCustomers || []);
+        return;
+    }
+    const filtered = (normalCustomers || []).filter(function(c) {
+        return (c.name || '').toLowerCase().indexOf(keyword) !== -1;
+    });
+    renderVipCustomerOptions(filtered);
+}
+
+function highlightVipCustomerOption(index) {
+    const dropdown = getVipCustomerDropdown();
+    const options = dropdown.querySelectorAll('.vip-customer-option');
+    options.forEach(function(opt, idx) {
+        if (idx === index) {
+            opt.style.background = 'var(--accent)';
+            opt.style.color = '#fff';
+        } else {
+            opt.style.background = '';
+            opt.style.color = '';
+        }
+    });
+    vipCustomerDropdownIndex = index;
+}
+
+function selectVipCustomer(id) {
+    const c = (normalCustomers || []).find(function(x) { return x.id == id; });
+    if (!c) return;
+
+    const nameInput = getVipCustomerNameInput();
+    const existingIdEl = document.getElementById('vip-existing-id');
+    const phoneEl = document.getElementById('vip-phone');
+    const addrEl = document.getElementById('vip-address');
+    const zipEl = document.getElementById('vip-zip');
+    const companyEl = document.getElementById('vip-company');
+    const countryEl = document.getElementById('vip-country');
+    const consigneeEl = document.getElementById('vip-consignee');
+
+    if (nameInput) nameInput.value = c.name || '';
+    if (existingIdEl) existingIdEl.value = c.id || '';
+    if (phoneEl) phoneEl.value = c.phone || '';
+    if (addrEl) addrEl.value = c.address || '';
+    if (zipEl) zipEl.value = c.zip_code || '';
+    if (companyEl) companyEl.value = c.company_name || '';
+    if (countryEl) countryEl.value = c.country || '';
+    if (consigneeEl) consigneeEl.value = c.invoice_contact || '';
+
+    const dropdown = getVipCustomerDropdown();
+    if (dropdown) dropdown.style.display = 'none';
+}
+
+function navigateVipCustomerDropdown(event) {
+    const dropdown = getVipCustomerDropdown();
+    if (!dropdown || dropdown.style.display === 'none') return;
+    const options = dropdown.querySelectorAll('.vip-customer-option');
+    if (!options.length) return;
+
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        vipCustomerDropdownIndex = (vipCustomerDropdownIndex + 1) % options.length;
+        highlightVipCustomerOption(vipCustomerDropdownIndex);
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        vipCustomerDropdownIndex = (vipCustomerDropdownIndex - 1 + options.length) % options.length;
+        highlightVipCustomerOption(vipCustomerDropdownIndex);
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (vipCustomerDropdownIndex >= 0) {
+            const opt = options[vipCustomerDropdownIndex];
+            selectVipCustomer(opt.dataset.id);
+        }
+    } else if (event.key === 'Escape') {
+        dropdown.style.display = 'none';
+    }
+}
+
+/* ========== VIP 管理 ========== */
+function toggleVipFields(checkbox) {
+    document.getElementById('vip-fields').style.display = checkbox.checked ? 'block' : 'none';
+}
+
+/* ========== 批量导入 ========== */
+function showImportModal() {
+ const content = `
+ <div class="file-upload" onclick="document.getElementById('import-file').click()">
+ <input type="file" id="import-file" accept=".xlsx,.xls" onchange="handleFileSelect(this)">
+ <p>点击选择 Excel 文件</p>
+ <p style="font-size:12px;color: var(--text-muted);margin-top:5px;">支持 .xlsx 和 .xls 格式</p>
+ </div>
+ <div id="file-info" style="margin-top:15px;display:none;">
+ <p>已选择: <span id="file-name"></span></p>
+ <button class="btn" onclick="uploadFile()" style="margin-top:10px;">开始导入</button>
+ </div>
+ <div style="margin-top:20px;font-size:12px;color: var(--text-secondary);">
+ <p><strong>Excel 文件格式要求：</strong></p>
+ <p>• 第一行为表头</p>
+ <p>• 包含客户姓名列和收货地址列</p>
+ <p>• 可选包含邮编列</p>
+ </div>
+ `;
+ showModal('批量导入客户', content, null);
+}
+
+let selectedFile = null;
+function handleFileSelect(input) {
+ selectedFile = input.files[0];
+ if (selectedFile) {
+ document.getElementById('file-name').textContent = selectedFile.name;
+ document.getElementById('file-info').style.display = 'block';
+ }
+}
+
+async function uploadFile() {
+ if (!selectedFile) { showToast('请先选择文件', 'error'); return; }
+ const formData = new FormData();
+ formData.append('file', selectedFile);
+ try {
+ const response = await fetch('/api/customer/import', { method:'POST', body:formData });
+ const result = await response.json();
+ if (result.success) {
+ showToast(result.message, 'success');
+ closeModal();
+ setTimeout(() => window.location.reload(), 1000);
+ } else {
+ showToast(result.message, 'error');
+ }
+ } catch (e) {
+ showToast('导入失败', 'error');
+ }
+}
+/* 初始化分页 */
+document.addEventListener('DOMContentLoaded', function() {
+ document.querySelectorAll('table').forEach(function(tbl, i) {
+ if (!tbl.id) tbl.id = 'ptbl-' + i;
+ Paginator.apply('#' + tbl.id, 15);
+ });
+});
+</script>
+{% endblock %}

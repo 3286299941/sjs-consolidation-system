@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+ <div class="card-title">入库明细记录</div>
+ 
+ <!-- 筛选条件 -->
+ <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+ <div class="form-group" style="margin-bottom: 0;">
+ <label>开始日期</label>
+ <input type="date" id="start-date" value="{{ start_date }}">
+ </div>
+ <div class="form-group" style="margin-bottom: 0;">
+ <label>结束日期</label>
+ <input type="date" id="end-date" value="{{ end_date }}">
+ </div>
+ <div class="form-group" style="margin-bottom: 0;">
+ <label>客户搜索</label>
+ <div class="cs-wrapper" id="cs-w-inrec" style="position:relative;">
+ <select id="customer-filter" style="display:none;">
+ <option value="">全部客户</option>
+ {% for c in customers %}
+ <option value="{{ c.id }}" data-name="{{ c.name }}" data-barcode="{{ c.barcode }}" data-no="{{ c.customer_no }}" data-zip="{{ c.zip_code|default('') }}" {% if selected_customer == c.id %}selected{% endif %}>{{ c.name }}</option>
+ {% endfor %}
+ </select>
+ <div id="cs-sel-inrec" style="display:none;margin-bottom:6px;padding:6px 10px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;font-size:13px;justify-content:space-between;align-items:center;">
+ <span id="cs-sel-lbl-inrec" style="color:#818cf8;"></span>
+ <button type="button" onclick="csClr('inrec')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.2);color:#dc2626;border-radius:4px;padding:1px 6px;cursor:pointer;font-size:12px;">×</button>
+ </div>
+ <div style="display:flex;gap:5px;">
+ <input type="text" id="cs-in-inrec" placeholder=" 搜索客户姓名/条码" autocomplete="off" autocorrect="off" spellcheck="false"
+ style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:160px;"
+ oninput="csSr('inrec')" onkeydown="csNv(event,'inrec')" onfocus="csSr('inrec')">
+ </div>
+ <div id="cs-dd-inrec" style="display:none;position:absolute;top:100%;left:0;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:999;max-height:240px;overflow-y:auto;margin-top:4px;min-width:220px;"></div>
+ </div>
+ </div>
+ <div class="form-group" style="margin-bottom: 0;">
+ <label>货物状态</label>
+ <select id="status-filter">
+ <option value="">全部状态</option>
+ <option value="已入库" {% if selected_status == '已入库' %}selected{% endif %}>已入库</option>
+ <option value="待打包" {% if selected_status == '待打包' %}selected{% endif %}>待打包</option>
+ <option value="已打包" {% if selected_status == '已打包' %}selected{% endif %}>已打包</option>
+ <option value="已退货" {% if selected_status == '已退货' %}selected{% endif %}>已退货</option>
+ </select>
+ </div>
+ <div class="form-group" style="margin-bottom: 0;">
+ <label>邮编筛选</label>
+ <select id="zip-filter">
+ <option value="">全部邮编</option>
+ {% for z in zip_codes %}
+ <option value="{{ z }}" {% if selected_zip == z %}selected{% endif %}>{{ z }}</option>
+ {% endfor %}
+ </select>
+ </div>
+<div class="form-group" style="margin-bottom: 0;">
+<label>单号搜索</label>
+<input type="text" id="tracking-search" placeholder="输入单号片段" value="{{ tracking_number }}"
+style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:160px;">
+</div>
+<div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+<button class="btn" onclick="applyFilters()">应用筛选</button>
+</div>
+ <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+ <button class="btn btn-secondary" onclick="exportExcel()">导出Excel</button>
+ </div>
+ <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+ <button class="btn btn-danger" onclick="batchDelete()" id="batch-delete-btn" style="display: none;"> 批量删除</button>
+ <button class="btn btn-primary" onclick="openChannelShipModal()" id="channel-ship-btn" style="display: none; margin-left: 8px;"> 渠道发货</button>
+ </div>
+ </div>
+ 
+ {% if records %}
+ <div style="margin-bottom: 15px;">
+ <strong>共 {{ total_count }} 条记录</strong>
+ </div>
+ 
+ <div style="overflow-x: auto;">
+ <table>
+ <thead>
+ <tr>
+ <th><input type="checkbox" id="select-all" onchange="toggleSelectAll()" title="全选/取消全选"></th>
+ <th>序号</th>
+ <th>入库时间</th>
+ <th>客户</th>
+ <th>序号</th>
+ <th>扫描单号</th>
+ <th>收货地</th>
+ <th>二次扫描单号</th>
+ <th>是否敏货</th>
+ <th>货物状态</th>
+ <th style="min-width:120px;"> 客户备注</th>
+ <th style="min-width:120px;"> 异常备注</th>
+ <th>操作</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for record in records %}
+ <tr>
+ <td><input type="checkbox" class="record-checkbox" value="{{ record.id }}" onchange="updateBatchDeleteBtn()"></td>
+ <td>{{ loop.index }}</td>
+ <td>{{ record.entry_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+ <td><strong>{{ record.customer.name }}</strong></td>
+ <td>{{ record.sequence_no }}</td>
+ <td><code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 12px;">{{ record.tracking_number }}</code></td>
+ <td>{{ record.receiving_address or record.customer.address }}</td>
+ <td>
+ {% if record.second_scan_number %}
+ <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 12px;">{{ record.second_scan_number }}</code>
+ {% else %}
+ -
+ {% endif %}
+ </td>
+ <td>
+ {% if record.is_danger %}
+ <span class="badge badge-danger">敏货</span>
+ {% else %}
+ <span class="badge badge-success">普货</span>
+ {% endif %}
+ </td>
+ <td>
+ {% if record.status == '已入库' %}
+ <span class="badge" style="background: #e0f2fe; color: #0284c7;">已入库</span>
+ {% elif record.status == '待打包' %}
+ <span class="badge" style="background: #fef3c7; color: #d97706;">待打包</span>
+ {% elif record.status == '已打包' %}
+ <span class="badge badge-success">已打包</span>
+ {% elif record.status == '已退货' %}
+ <span class="badge" style="background: #fee2e2; color: #dc2626;">已退货</span>
+ {% else %}
+ <span class="badge">{{ record.status }}</span>
+ {% endif %}
+ </td>
+ <td>
+ {% if record.customer_remark %}
+ <div style="background: rgba(245,158,11,0.12); border-left: 3px solid #f59e0b; padding: 2px 6px; border-radius: 3px; font-size: 11px; color: #92400e; font-weight: 600; word-break: break-all;"> {{ record.customer_remark }}</div>
+ {% else %}
+ <span style="color: var(--text-muted); font-size: 11px;">—</span>
+ {% endif %}
+ </td>
+ <td>
+ {% if record.abnormal_remark %}
+ <div style="background: rgba(239,68,68,0.1); border-left: 3px solid #ef4444; padding: 2px 6px; border-radius: 3px; font-size: 11px; color: #dc2626; font-weight: 600; word-break: break-all;"> {{ record.abnormal_remark }}</div>
+ {% else %}
+ <span style="color: var(--text-muted); font-size: 11px;">—</span>
+ {% endif %}
+ </td>
+ <td style="white-space: nowrap;">
+ {% if record.status == '已退货' %}
+ <button class="btn" onclick="restoreReturned(this)" data-id="{{ record.id }}" data-tracking="{{ record.tracking_number }}" style="padding: 4px 8px; font-size: 12px; background: #10b981; color: white;">回退</button>
+ {% elif record.status != '已打包' %}
+ <button class="btn" onclick="markReturned(this)" data-id="{{ record.id }}" data-tracking="{{ record.tracking_number }}" style="padding: 4px 8px; font-size: 12px; background: #f59e0b; color: white;">退货</button>
+ {% endif %}
+ <button class="btn btn-danger" onclick="deleteInboundRecord(this)" data-id="{{ record.id }}" data-tracking="{{ record.tracking_number }}" style="padding: 4px 8px; font-size: 12px;">删除</button>
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+{% if total_pages > 1 %}
+<div class="pagination-container">
+ <span class="page-info">共 {{ total_count }} 条，{{ page }}/{{ total_pages }} 页</span>
+ {% if page > 1 %}<a href="?page={{ page - 1 }}&per_page={{ per_page }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_customer %}&customer_id={{ selected_customer }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_batch_id %}&batch_id={{ selected_batch_id }}{% endif %}{% if selected_zip %}&zip_code={{ selected_zip }}{% endif %}{% if tracking_number %}&tracking_number={{ tracking_number }}{% endif %}" class="btn btn-secondary btn-xs">上一页</a>{% endif %}
+ {% if page < total_pages %}<a href="?page={{ page + 1 }}&per_page={{ per_page }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if selected_customer %}&customer_id={{ selected_customer }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if selected_batch_id %}&batch_id={{ selected_batch_id }}{% endif %}{% if selected_zip %}&zip_code={{ selected_zip }}{% endif %}{% if tracking_number %}&tracking_number={{ tracking_number }}{% endif %}" class="btn btn-secondary btn-xs">下一页</a>{% endif %}
+</div>
+{% endif %}
+ </div>
+ {% else %}
+ <div class="empty-state">
+ <p>暂无入库记录</p>
+ </div>
+ {% endif %}
+</div>
+
+<script>
+ function applyFilters() {
+ const startDate = document.getElementById('start-date').value;
+ const endDate = document.getElementById('end-date').value;
+ const customerId = document.getElementById('customer-filter').value;
+ const status = document.getElementById('status-filter').value;
+ const zipCode = document.getElementById('zip-filter').value;
+ const tracking = document.getElementById('tracking-search').value.trim();
+ 
+ const params = new URLSearchParams();
+ if (startDate) params.set('start_date', startDate);
+ if (endDate) params.set('end_date', endDate);
+ if (customerId) params.set('customer_id', customerId);
+ if (status) params.set('status', status);
+ if (zipCode) params.set('zip_code', zipCode);
+ if (tracking) params.set('tracking_number', tracking);
+ 
+ window.location.href = '/inbound/records?' + params.toString();
+ }
+ 
+ function exportExcel() {
+ showSecondaryPasswordModal(() => {
+ const startDate = document.getElementById('start-date').value;
+ const endDate = document.getElementById('end-date').value;
+ const customerId = document.getElementById('customer-filter').value;
+ const status = document.getElementById('status-filter').value;
+ const zipCode = document.getElementById('zip-filter').value;
+ const tracking = document.getElementById('tracking-search').value.trim();
+
+ const params = new URLSearchParams();
+ if (startDate) params.set('start_date', startDate);
+ if (endDate) params.set('end_date', endDate);
+ if (customerId) params.set('customer_id', customerId);
+ if (status) params.set('status', status);
+ if (zipCode) params.set('zip_code', zipCode);
+ if (tracking) params.set('tracking_number', tracking);
+
+ window.location.href = '/export/inbound?' + params.toString();
+ });
+ }
+
+ // ===== 客户搜索组件 =====
+ var _csI2 = {};
+ function csSr(id) {
+ var inp = document.getElementById('cs-in-' + id);
+ var dd = document.getElementById('cs-dd-' + id);
+ var val = inp.value.trim().toLowerCase();
+ _csI2[id] = -1;
+ if (!val) { dd.style.display = 'none'; return; }
+ var sel = document.getElementById('customer-filter');
+ var hits = Array.from(sel.options).filter(function(o) {
+ if (!o.value) return false;
+ var n = (o.dataset.name||'').toLowerCase();
+ var b = (o.dataset.barcode||'').toLowerCase();
+ var no = (o.dataset.no||'').toLowerCase();
+ var v = val;
+ return v.length >= 1 && (n.includes(v) || b.includes(v) || no.includes(v));
+ });
+ dd.innerHTML = '';
+ if (!hits.length) { dd.style.display = 'none'; return; }
+ hits.slice(0, 12).forEach(function(o, i) {
+ var d = document.createElement('div');
+ d.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;';
+ d.innerHTML = '<div style="font-weight:600">' + o.dataset.name + ' <span style="background:rgba(99, 102, 241, 0.12);color:#818cf8;padding:1px 5px;border-radius:3px;font-size:10px;margin-left:4px;">' + o.dataset.barcode + '</span></div>';
+ d.onclick = (function(oid, oname) { return function() { csPk(id, oid, oname); }; })(o.value, o.dataset.name);
+ d.onmouseenter = function() { Array.from(dd.children).forEach(function(c){c.style.background='';}); d.style.background='#f0f9ff'; _csI2[id]=i; };
+ dd.appendChild(d);
+ });
+ dd.style.display = 'block';
+ }
+ function csNv(e, id) {
+ var dd = document.getElementById('cs-dd-' + id);
+ var its = Array.from(dd.children);
+ if (!its.length) return;
+ if (e.key === 'ArrowDown') { e.preventDefault(); _csI2[id] = Math.min((_csI2[id]||0)+1, its.length-1); its.forEach(function(c,i){c.style.background=i===_csI2[id]?'#f0f9ff':'';}); its[_csI2[id]].scrollIntoView({block:'nearest'}); }
+ else if (e.key === 'ArrowUp') { e.preventDefault(); _csI2[id] = Math.max((_csI2[id]||0)-1,0); its.forEach(function(c,i){c.style.background=i===_csI2[id]?'#f0f9ff':'';}); its[_csI2[id]].scrollIntoView({block:'nearest'}); }
+ else if (e.key === 'Enter') { e.preventDefault(); if (_csI2[id]>=0) its[_csI2[id]].click(); else if (its.length===1) its[0].click(); }
+ else if (e.key === 'Escape') { dd.style.display = 'none'; }
+ }
+ function csPk(id, custId, custName) {
+ var sel = document.getElementById('customer-filter');
+ var inp = document.getElementById('cs-in-' + id);
+ var dd = document.getElementById('cs-dd-' + id);
+ var selDiv = document.getElementById('cs-sel-' + id);
+ var selLbl = document.getElementById('cs-sel-lbl-' + id);
+ sel.value = custId;
+ selLbl.innerHTML = '<strong>' + custName + '</strong>';
+ selDiv.style.display = 'flex';
+ inp.value = custName;
+ dd.style.display = 'none';
+ applyFilters();
+ }
+ function csClr(id) {
+ var sel = document.getElementById('customer-filter');
+ var inp = document.getElementById('cs-in-' + id);
+ var dd = document.getElementById('cs-dd-' + id);
+ var selDiv = document.getElementById('cs-sel-' + id);
+ sel.value = ''; selDiv.style.display = 'none'; inp.value = ''; dd.style.display = 'none';
+ applyFilters();
+ }
+ document.addEventListener('click', function(e) { if (!e.target.closest('.cs-wrapper')) { document.querySelectorAll('[id^="cs-dd-"]').forEach(function(d){d.style.display='none';}); } });
+
+ function deleteInboundRecord(btn) {
+ const id = parseInt(btn.getAttribute('data-id'));
+ const tracking = btn.getAttribute('data-tracking');
+ confirmDelete(`确定要删除入库记录 "<strong>${tracking}</strong>" 吗？`, async () => {
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest(`/api/inbound/delete/${id}`, { method: 'POST' });
+ showToast('删除成功', 'success');
+ setTimeout(() => window.location.reload(), 500);
+ } catch (e) {
+ showToast(e.message || '删除失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }
+
+ function markReturned(btn) {
+ const id = parseInt(btn.getAttribute('data-id'));
+ const tracking = btn.getAttribute('data-tracking');
+ confirmAction('标记退货', `确定要将包裹 "<strong>${tracking}</strong>" 标记为退货吗？`, async () => {
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest(`/api/inbound/mark_returned/${id}`, { method: 'POST' });
+ showToast(result.message || '已标记为退货', 'success');
+ setTimeout(() => window.location.reload(), 500);
+ } catch (e) {
+ showToast(e.message || '操作失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }
+
+ function restoreReturned(btn) {
+ const id = parseInt(btn.getAttribute('data-id'));
+ const tracking = btn.getAttribute('data-tracking');
+ confirmAction('回退退货', `确定要撤销包裹 "<strong>${tracking}</strong>" 的退货标记，恢复为已入库吗？`, async () => {
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest(`/api/inbound/restore_returned/${id}`, { method: 'POST' });
+ showToast(result.message || '已恢复为已入库', 'success');
+ setTimeout(() => window.location.reload(), 500);
+ } catch (e) {
+ showToast(e.message || '操作失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }
+
+ // ========== 批量删除 ==========
+ function toggleSelectAll() {
+ const checked = document.getElementById('select-all').checked;
+ document.querySelectorAll('.record-checkbox').forEach(cb => cb.checked = checked);
+ updateBatchDeleteBtn();
+ }
+
+ function updateBatchDeleteBtn() {
+ const count = document.querySelectorAll('.record-checkbox:checked').length;
+ const btn = document.getElementById('batch-delete-btn');
+ const chBtn = document.getElementById('channel-ship-btn');
+ btn.style.display = count > 0 ? '' : 'none';
+ chBtn.style.display = count > 0 ? '' : 'none';
+ if (count > 0) btn.textContent = ` 批量删除 (${count})`;
+ if (count > 0) chBtn.textContent = ` 渠道发货 (${count})`;
+ }
+
+ // ===== 渠道发货（空运/海运/其他快速标记）=====
+ function openChannelShipModal() {
+ const checked = document.querySelectorAll('.record-checkbox:checked');
+ if (checked.length === 0) { showToast('请先选择要标记的单号', 'warning'); return; }
+ document.getElementById('channel-modal-count').textContent = checked.length;
+ document.getElementById('channel-modal').style.display = 'flex';
+ }
+ function closeChannelShipModal() {
+ document.getElementById('channel-modal').style.display = 'none';
+ }
+ async function confirmChannelShip() {
+ const channel = document.getElementById('channel-select').value;
+ if (!channel) { showToast('请选择渠道', 'warning'); return; }
+ const shippedAt = document.getElementById('channel-time').value; // datetime-local，可为空
+ const internalNo = document.getElementById('channel-internal-no').value.trim();
+ const checked = document.querySelectorAll('.record-checkbox:checked');
+ const ids = Array.from(checked).map(cb => parseInt(cb.value));
+ closeChannelShipModal();
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest('/api/inbound/channel_ship', {
+ method: 'POST',
+ body: JSON.stringify({ package_ids: ids, channel: channel, shipped_at: shippedAt, internal_tracking_no: internalNo })
+ });
+ showToast(result.message || '标记成功', 'success');
+ setTimeout(() => window.location.reload(), 600);
+ } catch (e) {
+ showToast(e.message || '操作失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ }
+
+ async function batchDelete() {
+ const checked = document.querySelectorAll('.record-checkbox:checked');
+ if (checked.length === 0) { showToast('请先选择要删除的记录', 'warning'); return; }
+ const ids = Array.from(checked).map(cb => parseInt(cb.value));
+ confirmDelete(`确定要批量删除 <strong>${ids.length}</strong> 条入库记录吗？此操作不可撤销！`, async () => {
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ const result = await apiRequest('/api/inbound/batch_delete', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ ids })
+ });
+ showToast(result.message || '删除成功', 'success');
+ setTimeout(() => window.location.reload(), 800);
+ } catch (e) {
+ showToast(e.message || '删除失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+ }
+
+  // 分页
+  document.addEventListener('DOMContentLoaded', function() {
+  var tbl = document.querySelector('table');
+  if (tbl) { if (!tbl.id) tbl.id = 'inrec-tbl'; Paginator.apply('#inrec-tbl', 20); }
+  });
+</script>
+
+<!-- 渠道发货选择弹窗 -->
+<div id="channel-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center;">
+<div style="background:#fff; border-radius:10px; padding:24px; width:420px; max-width:92%;">
+<h3 style="margin:0 0 12px 0; font-size:16px;">渠道发货</h3>
+<p style="font-size:13px; color:var(--muted); margin:0 0 16px 0;">
+将所选 <strong id="channel-modal-count" style="color:#1565c0;">0</strong> 条单号标记为渠道发货（仅「已入库」状态的单号会被标记，其他状态自动跳过）。标记后从入库明细摘除，可在打包记录的「渠道发货」中查询。
+</p>
+<div style="margin-bottom:14px;">
+<label style="font-size:13px; display:block; margin-bottom:6px;">发货渠道：</label>
+<select id="channel-select" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;">
+<option value="空运">空运</option>
+<option value="快递">快递</option>
+<option value="小包">小包</option>
+</select>
+</div>
+<div style="margin-bottom:14px;">
+<label style="font-size:13px; display:block; margin-bottom:6px;">发货时间（选填，不填默认当天）：</label>
+<input type="datetime-local" id="channel-time" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;">
+</div>
+<div style="margin-bottom:16px;">
+<label style="font-size:13px; display:block; margin-bottom:6px;">内部单号（选填）：</label>
+<input type="text" id="channel-internal-no" placeholder="渠道内部单号/流水号" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;">
+</div>
+<div style="display:flex; gap:8px; justify-content:flex-end;">
+<button class="btn btn-secondary" onclick="closeChannelShipModal()">取消</button>
+<button class="btn btn-primary" onclick="confirmChannelShip()">确认标记</button>
+</div>
+</div>
+</div>
+{% endblock %}

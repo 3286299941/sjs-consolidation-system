@@ -1,0 +1,665 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+:root {
+ --radius-lg: 12px;
+ --radius: 8px;
+ --border: #e5e7eb;
+ --bg-card: #ffffff;
+ --bg-card-hover: #f9fafb;
+ --accent: #1565c0;
+ --text-primary: #111827;
+ --text-secondary: #6b7280;
+ --text-muted: #9ca3af;
+}
+
+.zip-group {
+ margin-bottom: 20px;
+ border: 1px solid var(--border);
+ border-radius: var(--radius-lg);
+ overflow: hidden;
+}
+.zip-header {
+ background: linear-gradient(135deg, #1565c0, #0d47a1);
+ color: white;
+ padding: 14px 20px;
+ cursor: pointer;
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ font-size: 16px;
+ font-weight: 600;
+ user-select: none;
+}
+.zip-body {
+ padding: 16px;
+}
+.batch-card {
+ border: 1px solid var(--border);
+ border-radius: var(--radius);
+ margin-bottom: 12px;
+ overflow: hidden;
+}
+.batch-card-header {
+ padding: 12px 16px;
+ cursor: pointer;
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ background: var(--bg-card);
+ border-bottom: 1px solid transparent;
+ transition: background 0.2s;
+ user-select: none;
+}
+.batch-card-header:hover {
+ background: var(--bg-card-hover);
+}
+.batch-card-body {
+ padding: 12px 16px;
+ display: none;
+}
+.batch-card-body.open {
+ display: block;
+}
+.batch-no {
+ font-size: 15px;
+ font-weight: 700;
+ color: var(--text-primary);
+}
+.card-arrow {
+ font-size: 11px;
+ color: var(--text-muted);
+ margin-left: 8px;
+}
+
+.header-left {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+}
+.header-right {
+ display: flex;
+ align-items: center;
+ gap: 6px;
+}
+
+.badge {
+ display: inline-block;
+ padding: 2px 8px;
+ border-radius: 10px;
+ font-size: 11px;
+ font-weight: 600;
+ white-space: nowrap;
+}
+.badge-success {
+ background: #dcfce7;
+ color: #16a34a;
+}
+.badge-danger {
+ background: #fee2e2;
+ color: #dc2626;
+}
+.badge-info {
+ background: #dbeafe;
+ color: #1d4ed8;
+}
+.badge-warning {
+ background: #fef3c7;
+ color: #d97706;
+}
+.badge-accent {
+ background: #eef2ff;
+ color: #1565c0;
+}
+.action-buttons {
+ display: flex;
+ gap: 6px;
+ flex-wrap: wrap;
+ margin-top: 12px;
+}
+.action-buttons .btn {
+ padding: 5px 12px;
+ font-size: 12px;
+}
+
+.logistics-table {
+ width: 100%;
+ border-collapse: collapse;
+ margin-top: 8px;
+ font-size: 13px;
+}
+.logistics-table th {
+ padding: 8px 10px;
+ background: #f9fafb;
+ border-bottom: 2px solid var(--border);
+ text-align: left;
+ font-weight: 600;
+ font-size: 12px;
+ color: var(--text-secondary);
+}
+.logistics-table td {
+ padding: 8px 10px;
+ border-bottom: 1px solid var(--border);
+}
+.logistics-table tr:last-child td {
+ border-bottom: none;
+}
+
+.editable {
+ cursor: pointer;
+ padding: 8px 12px;
+ border-radius: 3px;
+ border: 1px dashed transparent;
+ display: block;
+ width: 100%;
+ min-height: 36px;
+ box-sizing: border-box;
+}
+.logistics-table td:has(.editable) {
+ padding: 0;
+}
+.editable:hover {
+ background: #eef2ff;
+ border-color: #1565c0;
+}
+
+.logistics-stages {
+ display: flex;
+ gap: 6px;
+ align-items: center;
+ flex-wrap: wrap;
+}
+.logistics-stages .stage {
+ font-size: 11px;
+ padding: 2px 6px;
+ border-radius: 3px;
+ background: #f3f4f6;
+ color: var(--text-secondary);
+ white-space: nowrap;
+}
+.logistics-stages .stage.done {
+ background: #dcfce7;
+ color: #16a34a;
+}
+
+.stage-inputs {
+ display: flex;
+ gap: 4px;
+ align-items: center;
+ flex-wrap: wrap;
+}
+.stage-inputs input {
+ width: 70px;
+ padding: 3px 6px;
+ border: 1px solid #1565c0;
+ border-radius: 4px;
+ font-size: 12px;
+}
+.stage-inputs .stage-label {
+ font-size: 11px;
+ color: var(--text-secondary);
+ white-space: nowrap;
+}
+</style>
+
+<div class="card">
+ <div class="card-title">
+ <span>批次管理</span>
+ </div>
+
+ <!-- 创建批次表单 -->
+ <div class="card" style="margin-bottom: 20px; padding: 16px;">
+ <div style="font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">创建批次</div>
+ <div style="display:flex; gap:12px; align-items:end; flex-wrap:wrap;">
+ <div>
+ <label style="display:block; margin-bottom:4px; font-size:13px; color:var(--text-secondary);">批次号 <span style="color:var(--danger);">*</span></label>
+ <input type="text" id="new-batch-no" placeholder="输入批次号" style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; width:180px; box-sizing:border-box;">
+ </div>
+ <div>
+ <label style="display:block; margin-bottom:4px; font-size:13px; color:var(--text-secondary);">邮编 <span style="color:var(--danger);">*</span></label>
+ <input type="text" id="new-batch-zip" placeholder="如 91755" style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; width:100px; box-sizing:border-box;">
+ </div>
+ <div>
+ <label style="display:block; margin-bottom:4px; font-size:13px; color:var(--text-secondary);">普货派送 <span style="color:var(--danger);">*</span></label>
+ <select id="new-batch-normal" style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; width:100px; box-sizing:border-box;">
+ <option value="海派">海派</option>
+ <option value="卡派">卡派</option>
+ <option value="自提">自提</option>
+ </select>
+ </div>
+ <div>
+ <label style="display:block; margin-bottom:4px; font-size:13px; color:var(--text-secondary);">敏货派送 <span style="color:var(--danger);">*</span></label>
+ <select id="new-batch-sensitive" style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; width:100px; box-sizing:border-box;">
+ <option value="海派">海派</option>
+ <option value="卡派">卡派</option>
+ <option value="自提">自提</option>
+ </select>
+ </div>
+ <button onclick="createBatch()" class="btn" style="padding:8px 20px;background:var(--accent);color:#fff;height:fit-content;">创建</button>
+ </div>
+ </div>
+
+ {% if batches %}
+ {% for zip_code, zip_batches in batches|sort(attribute='zip_code')|groupby('zip_code') %}
+ <div class="zip-group">
+ <div class="zip-header" onclick="toggleZipGroup(this)">
+ <span>{{ zip_code or '未分类' }}</span>
+ <span class="zip-arrow">&#9660;</span>
+ </div>
+ <div class="zip-body">
+ {% for batch in zip_batches %}
+ <div class="batch-card" id="batch-card-{{ batch.id }}">
+ <div class="batch-card-header" onclick="toggleBatchBody(this)">
+ <div class="header-left">
+ <span class="batch-no">{{ batch.batch_no }}</span>
+ {% if batch.is_locked %}
+ <span class="badge badge-info">已锁定</span>
+ {% else %}
+ <span class="badge badge-warning">未锁定</span>
+ {% endif %}
+ {% if batch.normal_delivery %}
+ <span class="badge badge-accent">{{ batch.normal_delivery }}</span>
+ {% endif %}
+ </div>
+ <div class="header-right">
+ {% set count = batch_packed_counts.get(batch.id, 0) %}
+ {% if count > 0 %}
+ <span class="badge" style="background:var(--bg-input);color:var(--text-secondary);font-size:11px;">{{ count }}件</span>
+ {% endif %}
+ <span style="font-size:12px; color:var(--text-secondary);">{{ batch_item_counts.get(batch.id, 0) }}件</span>
+ <span class="card-arrow">&#9660;</span>
+ </div>
+ </div>
+ <div class="batch-card-body">
+ {% set groups = batch_groups_data.get(batch.id, []) %}
+ {% if groups %}
+ <span style="font-size:13px; font-weight:600; display:inline-block; margin-bottom:6px; color:var(--text-primary);">物流轨迹</span>
+ <table class="logistics-table">
+ <thead>
+ <tr>
+ <th>组名</th>
+ <th style="width:150px;">内部单号</th>
+ <th style="width:150px;">转单号</th>
+ <th style="text-align:center;width:50px;">箱数</th>
+ <th>物流进度</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for g in groups %}
+ <tr>
+                    <td>
+                        {{ g.name }}
+                        {% if g.type == '普货' %}<span class="badge badge-success" style="white-space:nowrap;">普货</span>{% endif %}
+                        {% if g.type == '敏货' %}<span class="badge badge-danger" style="white-space:nowrap;">敏货</span>{% endif %}
+                    </td>
+ <td><span class="editable" onclick="editGroupField(this, {{ g.group_id }}, 'internal_tracking')">{{ g.internal_tracking or '' }}</span></td>
+ <td><span class="editable" onclick="editGroupField(this, {{ g.group_id }}, 'transfer_tracking')">{{ g.transfer_tracking or '' }}</span></td>
+ <td style="text-align:center;">{{ g.carton_count }}箱</td>
+ <td><span class="editable logistics-status" data-raw="{{ g.logistics_status or '' }}" onclick="editLogisticsStatus(this, {{ g.group_id }})">{% if g.logistics_status %}{{ g.logistics_status }}{% else %}预计--月--日开船，预计--月--日到港，预计--月--日提柜，预计--月--日签收{% endif %}</span></td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ {% endif %}
+
+ <div class="action-buttons">
+ <button class="btn btn-secondary" onclick="editBatch({{ batch.id }})">编辑</button>
+ <button class="btn btn-secondary" onclick="printBatch({{ batch.id }})">清单</button>
+ {% if batch.is_locked %}
+ <button class="btn btn-warning" onclick="toggleLock({{ batch.id }}, 'unlock', '{{ batch.batch_no }}')">解锁</button>
+ {% elif batch_can_lock.get(batch.id, False) %}
+ <button class="btn" onclick="toggleLock({{ batch.id }}, 'lock', '{{ batch.batch_no }}')" style="background:#1565c0;color:#fff;">锁定</button>
+ {% else %}
+ <button class="btn" disabled style="opacity:0.4;cursor:not-allowed;" title="该批次还有未完成包裹或待确认货物，暂不可锁定">锁定</button>
+ {% endif %}
+ <button class="btn btn-danger" onclick="deleteBatch({{ batch.id }}, '{{ batch.batch_no }}')">删除</button>
+ </div>
+ </div>
+ </div>
+ {% endfor %}
+ </div>
+ </div>
+ {% endfor %}
+ {% else %}
+ <div class="empty-state">
+ <p>暂无批次数据</p>
+ </div>
+ {% endif %}
+</div>
+
+<!-- 编辑批次弹窗 -->
+<div id="edit-modal-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;justify-content:center;align-items:center;">
+ <div style="background:#fff;border-radius:10px;padding:25px;width:450px;max-width:90vw;">
+ <h3 style="margin-top:0;">编辑批次信息</h3>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px;">
+ <div>
+ <label style="font-weight:500;display:block;margin-bottom:3px;">批次编号</label>
+ <input type="text" id="edit-batch-no" readonly style="padding:8px 12px;border:1px solid #ddd;border-radius:4px;width:100%;box-sizing:border-box;background:#f5f5f5;">
+ </div>
+ <div>
+ <label style="font-weight:500;display:block;margin-bottom:3px;">邮编</label>
+ <input type="text" id="edit-batch-zip" style="padding:8px 12px;border:1px solid var(--border);border-radius:4px;width:100%;box-sizing:border-box;">
+ </div>
+ <div>
+ <label style="font-weight:500;display:block;margin-bottom:3px;">普货派送</label>
+ <select id="edit-batch-normal" style="padding:8px 12px;border:1px solid var(--border);border-radius:4px;width:100%;box-sizing:border-box;">
+ <option value="海派">海派</option>
+ <option value="卡派">卡派</option>
+ <option value="自提">自提</option>
+ </select>
+ </div>
+ <div>
+ <label style="font-weight:500;display:block;margin-bottom:3px;">敏货派送</label>
+ <select id="edit-batch-sensitive" style="padding:8px 12px;border:1px solid var(--border);border-radius:4px;width:100%;box-sizing:border-box;">
+ <option value="海派">海派</option>
+ <option value="卡派">卡派</option>
+ <option value="自提">自提</option>
+ </select>
+ </div>
+ </div>
+ <div style="display:flex;justify-content:flex-end;gap:10px;">
+ <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+ <button class="btn" onclick="saveEditBatch()">保存</button>
+ </div>
+ </div>
+</div>
+
+<script>
+let editingBatchId = null;
+
+// 批次卡片折叠
+function toggleBatchBody(header) {
+ var body = header.nextElementSibling;
+ var arrow = header.querySelector('.card-arrow');
+ body.classList.toggle('open');
+ arrow.textContent = body.classList.contains('open') ? '\u25B2' : '\u25BC';
+}
+
+// 邮编分组折叠
+function toggleZipGroup(header) {
+ var body = header.nextElementSibling;
+ var arrow = header.querySelector('.zip-arrow');
+ if (body.style.display === 'none') {
+ body.style.display = 'block';
+ arrow.textContent = '\u25BC';
+ } else {
+ body.style.display = 'none';
+ arrow.textContent = '\u25B6';
+ }
+}
+
+// 编辑合箱分组字段（内部单号、转单号）
+function editGroupField(span, groupId, field) {
+ if (span.querySelector('input')) return;
+ var current = span.textContent.trim();
+ var input = document.createElement('input');
+ input.type = 'text';
+ input.value = current;
+ input.style.cssText = 'width:100%;padding:4px 8px;border:1px solid #1565c0;border-radius:4px;font-size:13px;box-sizing:border-box;';
+ span.textContent = '';
+ span.appendChild(input);
+ input.focus();
+ input.onblur = function() { saveGroupField(span, groupId, field, input.value); };
+ input.onkeydown = function(e) { if (e.key === 'Enter') { input.blur(); } };
+}
+
+async function saveGroupField(span, groupId, field, value) {
+ try {
+ var result = await apiRequest('/api/carton_group/update/' + groupId, {
+ method: 'POST',
+ headers: {'Content-Type': 'application/json'},
+ body: JSON.stringify({field: field, value: value})
+ });
+ span.textContent = value;
+ if (!result.success) {
+ showToast(result.message || '保存失败', 'error');
+ }
+ } catch(e) {
+ span.textContent = value;
+ showToast('网络错误', 'error');
+ }
+}
+
+// 物流进度编辑（预计 月 日开船/到港/提柜/签收）
+function editLogisticsStatus(span, groupId) {
+ if (span.querySelector('.stage-inputs')) return;
+
+ var stages = ['开船', '到港', '提柜', '签收'];
+ var current = span.getAttribute('data-raw') || span.textContent.trim();
+ if (current === '点击编辑' || current === '未记录') current = '';
+ var parts = current ? current.split('|') : [];
+
+ var container = document.createElement('div');
+ container.className = 'stage-inputs';
+ container.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
+
+ for (var i = 0; i < stages.length; i++) {
+ var part = parts[i] || '';
+ var m = '', d = '';
+ if (part) {
+ var match = part.match(/^(\d{1,2})-(\d{1,2})$/);
+ if (match) { m = match[1]; d = match[2]; }
+ }
+ var stage = document.createElement('div');
+ stage.style.cssText = 'display:flex;align-items:center;gap:3px;';
+ stage.innerHTML = '<span style="font-size:12px;color:var(--text-secondary);">预计</span>' +
+ '<input type="text" data-index="' + i + '" data-part="m" value="' + m + '" placeholder="M" style="width:38px;padding:3px 6px;border:1px solid #1565c0;border-radius:4px;font-size:12px;text-align:center;box-sizing:border-box;">' +
+ '<span style="font-size:12px;color:var(--text-secondary);">月</span>' +
+ '<input type="text" data-index="' + i + '" data-part="d" value="' + d + '" placeholder="D" style="width:38px;padding:3px 6px;border:1px solid #1565c0;border-radius:4px;font-size:12px;text-align:center;box-sizing:border-box;">' +
+ '<span style="font-size:12px;color:var(--text-secondary);">日' + stages[i] + '</span>';
+ container.appendChild(stage);
+ }
+
+ var saveBtn = document.createElement('button');
+ saveBtn.textContent = '保存';
+ saveBtn.style.cssText = 'padding:4px 12px;font-size:12px;background:#1565c0;color:#fff;border:none;border-radius:4px;cursor:pointer;';
+ saveBtn.onclick = function(e) { e.stopPropagation(); saveLogisticsStatus(span, groupId, container); };
+
+ var cancelBtn = document.createElement('button');
+ cancelBtn.textContent = '取消';
+ cancelBtn.style.cssText = 'padding:4px 12px;font-size:12px;background:#e5e7eb;color:#374151;border:none;border-radius:4px;cursor:pointer;';
+ cancelBtn.onclick = function(e) { e.stopPropagation(); var raw = span.getAttribute('data-raw'); span.textContent = raw ? formatLogisticsStatusText(raw) : '预计--月--日开船，预计--月--日到港，预计--月--日提柜，预计--月--日签收'; };
+
+ container.appendChild(saveBtn);
+ container.appendChild(cancelBtn);
+
+ span.textContent = '';
+ span.appendChild(container);
+ container.querySelector('input').focus();
+}
+
+function formatLogisticsStatusText(value) {
+ if (!value) return '未记录';
+ var labels = ['开船', '到港', '提柜', '签收'];
+ var parts = value.split('|');
+ var result = [];
+ for (var i = 0; i < labels.length; i++) {
+ var part = parts[i] || '';
+ var m = '--', d = '--';
+ if (part) {
+ var match = part.match(/^(\d{1,2})-(\d{1,2})$/);
+ if (match) { m = match[1]; d = match[2]; }
+ }
+ result.push('预计' + m + '月' + d + '日' + labels[i]);
+ }
+ return result.join('，');
+}
+
+async function saveLogisticsStatus(span, groupId, container) {
+ var stages = container.querySelectorAll('div[data-index]');
+ var values = [];
+ for (var i = 0; i < 4; i++) {
+ var m = container.querySelector('input[data-index="' + i + '"][data-part="m"]').value.trim();
+ var d = container.querySelector('input[data-index="' + i + '"][data-part="d"]').value.trim();
+ if (m && d) {
+ values.push(m + '-' + d);
+ } else {
+ values.push('');
+ }
+ }
+ var value = values.join('|');
+
+ try {
+ var result = await apiRequest('/api/carton_group/update/' + groupId, {
+ method: 'POST',
+ headers: {'Content-Type': 'application/json'},
+ body: JSON.stringify({field: 'logistics_status', value: value})
+ });
+ span.setAttribute('data-raw', value);
+ span.textContent = formatLogisticsStatusText(value);
+ if (!result.success) {
+ showToast(result.message || '保存失败', 'error');
+ }
+ } catch(e) {
+ span.setAttribute('data-raw', value);
+ span.textContent = formatLogisticsStatusText(value);
+ showToast('网络错误', 'error');
+ }
+}
+
+// 创建批次
+async function createBatch() {
+ if (isActionLocked()) return;
+ var batchNo = document.getElementById('new-batch-no').value.trim();
+ var zipCode = document.getElementById('new-batch-zip').value.trim();
+ var normalDelivery = document.getElementById('new-batch-normal').value;
+ var sensitiveDelivery = document.getElementById('new-batch-sensitive').value;
+
+ if (!batchNo) { showToast('请输入批次号', 'error'); return; }
+ if (!zipCode) { showToast('请输入邮编', 'error'); return; }
+ if (!normalDelivery) { showToast('请选择普货派送方式', 'error'); return; }
+ if (!sensitiveDelivery) { showToast('请选择敏货派送方式', 'error'); return; }
+
+ lockAction();
+ try {
+ var result = await apiRequest('/api/batch/create', {
+ method: 'POST',
+ body: JSON.stringify({
+ batch_no: batchNo,
+ zip_code: zipCode,
+ normal_delivery: normalDelivery,
+ sensitive_delivery: sensitiveDelivery
+ })
+ });
+ showToast('批次 ' + result.batch_no + ' 创建成功', 'success');
+ document.getElementById('new-batch-no').value = '';
+ document.getElementById('new-batch-zip').value = '';
+ setTimeout(function() { window.location.reload(); }, 500);
+ } catch (e) {
+ showToast(e.message || '创建失败', 'error');
+ } finally {
+ unlockAction();
+ }
+}
+
+// 编辑批次
+async function editBatch(id) {
+ try {
+ var resp = await fetch('/api/batch/' + id);
+ var batch = await resp.json();
+ editingBatchId = id;
+
+ document.getElementById('edit-batch-no').value = batch.batch_no;
+ document.getElementById('edit-batch-zip').value = batch.zip_code || '';
+ document.getElementById('edit-batch-normal').value = batch.normal_delivery || '海派';
+ document.getElementById('edit-batch-sensitive').value = batch.sensitive_delivery || '海派';
+
+ document.getElementById('edit-modal-overlay').style.display = 'flex';
+ } catch(e) {
+ showToast('获取批次信息失败', 'error');
+ }
+}
+
+function closeEditModal() {
+ document.getElementById('edit-modal-overlay').style.display = 'none';
+ editingBatchId = null;
+}
+
+async function saveEditBatch() {
+ if (isActionLocked()) return;
+
+ lockAction();
+ try {
+ await apiRequest('/api/batch/update/' + editingBatchId, {
+ method: 'POST',
+ body: JSON.stringify({
+ zip_code: document.getElementById('edit-batch-zip').value.trim(),
+ normal_delivery: document.getElementById('edit-batch-normal').value,
+ sensitive_delivery: document.getElementById('edit-batch-sensitive').value
+ })
+ });
+ showToast('批次信息更新成功', 'success');
+ closeEditModal();
+ setTimeout(function() { window.location.reload(); }, 300);
+ } catch (e) {
+ showToast(e.message || '更新失败', 'error');
+ } finally {
+ unlockAction();
+ }
+}
+
+function printBatch(batchId) {
+ window.open('/print_batch/' + batchId, '_blank', 'width=800,height=600');
+}
+
+async function deleteBatch(batchId, batchNo) {
+ confirmDelete('确定要删除批次 "<strong>' + batchNo + '</strong>" 吗？<br>该批次下的所有打包记录将被移除关联。', async function() {
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ var result = await apiRequest('/api/batch/delete/' + batchId, { method: 'POST' });
+ showToast(result.message, 'success');
+ setTimeout(function() { window.location.reload(); }, 500);
+ } catch (e) {
+ showToast(e.message || '删除失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+}
+
+async function toggleLock(batchId, action, batchNo) {
+ var label = action === 'lock' ? '锁定' : '解锁';
+ var extraMsg = action === 'lock' ? '<br>锁定后该批次将在操作页面中隐藏。' : '';
+ confirmDelete('确定要<b>' + label + '</b>批次 "<strong>' + batchNo + '</strong>" 吗？' + extraMsg, async function() {
+ if (isActionLocked()) return;
+ lockAction();
+ try {
+ var result = await apiRequest('/api/batch/' + batchId + '/lock', {
+ method: 'POST',
+ body: JSON.stringify({ action: action })
+ });
+ showToast(result.message, 'success');
+ setTimeout(function() { window.location.reload(); }, 500);
+ } catch (e) {
+ showToast(e.message || label + '失败', 'error');
+ } finally {
+ unlockAction();
+ }
+ });
+}
+
+// 回车键快速创建 + 格式化物流进度显示
+document.addEventListener('DOMContentLoaded', function() {
+ var input = document.getElementById('new-batch-no');
+ if (input) {
+ input.addEventListener('keypress', function(e) {
+ if (e.key === 'Enter') { createBatch(); }
+ });
+ }
+ // 页面加载时格式化所有物流进度
+ document.querySelectorAll('.logistics-status').forEach(function(span) {
+ var raw = span.getAttribute('data-raw');
+ if (raw) {
+ span.textContent = formatLogisticsStatusText(raw);
+ }
+ });
+});
+
+// 点击遮罩关闭
+document.getElementById('edit-modal-overlay').addEventListener('click', function(e) {
+ if (e.target === this) closeEditModal();
+});
+</script>
+{% endblock %}

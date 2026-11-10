@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">📦 无主单号</div>
+    <p style="color: var(--text-muted); margin-bottom: 15px;">以下包裹入库时未指定客户，请确认归属后分配到对应客户名下</p>
+
+    <!-- 单号搜索 -->
+    <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+        <input type="text" id="tracking-search" placeholder="🔍 输入单号快速检索" autocomplete="off"
+               style="padding: 8px 14px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; width: 280px;"
+               oninput="filterAnonymous()">
+        <span id="filter-count" style="font-size: 13px; color: var(--text-muted);"></span>
+    </div>
+
+    <div id="anonymous-list" style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 50px;">序号</th>
+                    <th>入库时间</th>
+                    <th>快递单号</th>
+                    <th>客户备注</th>
+                    <th>异常备注</th>
+                    <th style="width: 280px;">指定客户</th>
+                    <th style="width: 60px;">操作</th>
+                </tr>
+            </thead>
+            <tbody id="anonymous-tbody">
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state" style="padding: 40px;">加载中...</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// 全部客户数据（从 Jinja 渲染到 JS）
+var allCustomers = [
+    {% for c in customers %}
+    {id: {{ c.id }}, name: "{{ c.name }}", barcode: "{{ c.barcode }}", zip: "{{ c.zip_code or '' }}"}{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+// 每个包裹当前选中的客户ID
+var selectedCustomer = {};
+
+// ===== 搜索客户 =====
+var _csIdxA = {};
+
+function csSearch(pid) {
+    var inp = document.getElementById('cs-in-' + pid);
+    var dd = document.getElementById('cs-dd-' + pid);
+    var val = inp.value.trim().toLowerCase();
+    _csIdxA[pid] = -1;
+    if (!val) { dd.style.display = 'none'; return; }
+
+    var hits = allCustomers.filter(function(c) {
+        var n = c.name.toLowerCase();
+        var b = c.barcode.toLowerCase();
+        return n.includes(val) || b.includes(val);
+    });
+
+    dd.innerHTML = '';
+    if (!hits.length) { dd.style.display = 'none'; return; }
+
+    hits.slice(0, 15).forEach(function(c, i) {
+        var div = document.createElement('div');
+        div.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid rgba(148,163,184,0.12);font-size:12px;';
+        div.innerHTML = '<strong>' + c.name + '</strong> <span style="color:#818cf8;font-size:11px;">(' + c.barcode + ')</span>' + (c.zip ? ' <span style="color:#94a3b8;font-size:10px;">邮编:' + c.zip + '</span>' : '');
+        div.onclick = (function(cust) { return function() { csPick(pid, cust); }; })(c);
+        div.onmouseenter = function() { Array.from(dd.children).forEach(function(d) { d.style.background = ''; }); div.style.background = 'rgba(6,182,212,0.1)'; _csIdxA[pid] = i; };
+        dd.appendChild(div);
+    });
+    dd.style.display = 'block';
+}
+
+function csNav(e, pid) {
+    var dd = document.getElementById('cs-dd-' + pid);
+    var items = Array.from(dd.children);
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); _csIdxA[pid] = Math.min((_csIdxA[pid]||0)+1, items.length-1); items.forEach(function(c,i){c.style.background=i===_csIdxA[pid]?'rgba(6,182,212,0.1)':'';}); items[_csIdxA[pid]].scrollIntoView({block:'nearest'}); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); _csIdxA[pid] = Math.max((_csIdxA[pid]||0)-1, 0); items.forEach(function(c,i){c.style.background=i===_csIdxA[pid]?'rgba(6,182,212,0.1)':'';}); items[_csIdxA[pid]].scrollIntoView({block:'nearest'}); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (_csIdxA[pid]>=0) items[_csIdxA[pid]].click(); else if (items.length===1) items[0].click(); }
+    else if (e.key === 'Escape') { dd.style.display = 'none'; }
+}
+
+function csPick(pid, cust) {
+    var inp = document.getElementById('cs-in-' + pid);
+    var dd = document.getElementById('cs-dd-' + pid);
+    var selDiv = document.getElementById('cs-sel-' + pid);
+    var label = document.getElementById('cs-label-' + pid);
+
+    selectedCustomer[pid] = cust.id;
+    label.innerHTML = '<strong>' + cust.name + '</strong> <span style="font-size:10px;color:#94a3b8;">(' + cust.barcode + ')</span>';
+    selDiv.style.display = 'flex';
+    inp.value = cust.name + ' (' + cust.barcode + ')';
+    dd.style.display = 'none';
+    // 聚焦到确认按钮方便操作
+    inp.blur();
+}
+
+function csClearSearch(pid) {
+    var inp = document.getElementById('cs-in-' + pid);
+    var dd = document.getElementById('cs-dd-' + pid);
+    var selDiv = document.getElementById('cs-sel-' + pid);
+    selectedCustomer[pid] = null;
+    selDiv.style.display = 'none';
+    inp.value = '';
+    dd.style.display = 'none';
+}
+
+// 点击外部关闭下拉
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.cs-wrapper')) {
+        document.querySelectorAll('[id^="cs-dd-"]').forEach(function(d){ d.style.display = 'none'; });
+    }
+});
+
+// ===== 加载无主包裹列表 =====
+var allAnonymousData = [];  // 存储全量数据
+
+function loadAnonymous() {
+    apiRequest('/api/anonymous/list').then(data => {
+        allAnonymousData = data;
+        renderAnonymous(data);
+    }).catch(err => {
+        console.error(err);
+        document.getElementById('anonymous-tbody').innerHTML = '<tr><td colspan="7"><div class="empty-state" style="padding: 40px;">加载失败，请刷新重试</div></td></tr>';
+    });
+}
+
+function filterAnonymous() {
+    const keyword = document.getElementById('tracking-search').value.trim().toLowerCase();
+    if (!keyword) {
+        renderAnonymous(allAnonymousData);
+        return;
+    }
+    const filtered = allAnonymousData.filter(r => r.tracking_number.toLowerCase().includes(keyword));
+    renderAnonymous(filtered);
+    document.getElementById('filter-count').textContent = `找到 ${filtered.length} 条`;
+}
+
+function renderAnonymous(data) {
+    const tbody = document.getElementById('anonymous-tbody');
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state" style="padding: 40px;">🎉 暂无无主包裹</div></td></tr>';
+        document.getElementById('filter-count').textContent = '共 0 条';
+        return;
+    }
+    document.getElementById('filter-count').textContent = `共 ${data.length} 条`;
+    tbody.innerHTML = data.map((r, i) => `
+            <tr id="row-${r.id}">
+                <td>${i + 1}</td>
+                <td>${r.entry_time}</td>
+                <td><code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 12px;">${r.tracking_number}</code></td>
+                <td>${r.customer_remark || '-'}</td>
+                <td>${r.abnormal_remark || '-'}</td>
+                <td id="assign-cell-${r.id}">
+                    <div class="cs-wrapper" id="cs-w-${r.id}" style="position: relative;">
+                        <div id="cs-sel-${r.id}" style="display:none; margin-bottom:4px; padding:4px 8px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:4px; font-size:12px; justify-content:space-between; align-items:center;">
+                            <span id="cs-label-${r.id}" style="color:#818cf8;"></span>
+                            <button type="button" onclick="csClearSearch(${r.id})" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.2);color:#dc2626;border-radius:3px;padding:1px 5px;cursor:pointer;font-size:11px;">×</button>
+                        </div>
+                        <div style="display:flex; gap:4px;">
+                            <input type="text" id="cs-in-${r.id}" placeholder="搜索客户姓名/条码" autocomplete="off"
+                                   style="flex:1; padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:12px;"
+                                   oninput="csSearch(${r.id})" onkeydown="csNav(event, ${r.id})" onfocus="csSearch(${r.id})">
+                            <button class="btn btn-xs" onclick="assignPackage(${r.id})" style="padding:3px 8px; font-size:12px; white-space:nowrap;">确认</button>
+                        </div>
+                        <div id="cs-dd-${r.id}" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:4px; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:999; max-height:200px; overflow-y:auto; margin-top:2px;"></div>
+                    </div>
+                </td>
+                <td><button class="btn btn-danger btn-xs" onclick="deleteAnonymous(${r.id}, '${r.tracking_number}')" style="padding: 3px 8px; font-size: 11px;">删除</button></td>
+            </tr>
+        `).join('');
+}
+
+// 指定包裹到客户
+function assignPackage(packageId) {
+    const customerId = selectedCustomer[packageId];
+    if (!customerId) {
+        showToast('请先搜索并选择客户', 'warning');
+        return;
+    }
+
+    const inp = document.getElementById('cs-in-' + packageId);
+    const customerName = inp.value.replace(/\s*\(.*\)\s*$/, '');
+
+    if (!confirm(`确认将单号分配给「${customerName}」？`)) return;
+
+    apiRequest('/api/anonymous/assign', {
+        method: 'POST',
+        body: JSON.stringify({ package_id: packageId, customer_id: customerId }),
+        headers: { 'Content-Type': 'application/json' }
+    }).then(res => {
+        if (res.success) {
+            showToast(res.message, 'success');
+            // 移除该行
+            const row = document.getElementById('row-' + packageId);
+            if (row) {
+                row.style.transition = 'opacity 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => {
+                    row.remove();
+                    renumberRows();
+                }, 300);
+            }
+        } else {
+            showToast(res.message, 'error');
+        }
+    }).catch(err => {
+        console.error(err);
+        showToast('操作失败', 'error');
+    });
+}
+
+// 删除无主包裹
+function deleteAnonymous(packageId, trackingNumber) {
+    if (!confirm(`确认删除无主包裹「${trackingNumber}」？`)) return;
+
+    apiRequest('/api/anonymous/delete/' + packageId, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    .then(res => {
+        if (res.success) {
+            showToast(res.message, 'success');
+            const row = document.getElementById('row-' + packageId);
+            if (row) {
+                row.style.transition = 'opacity 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => {
+                    row.remove();
+                    renumberRows();
+                }, 300);
+            }
+        } else {
+            showToast(res.message, 'error');
+        }
+    }).catch(err => {
+        console.error(err);
+        showToast('删除失败', 'error');
+    });
+}
+
+// 重新编号
+function renumberRows() {
+    const tbody = document.getElementById('anonymous-tbody');
+    const rows = tbody.querySelectorAll('tr[id^="row-"]');
+    if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state" style="padding: 40px;">🎉 暂无无主包裹</div></td></tr>';
+    } else {
+        rows.forEach((r, i) => {
+            r.querySelector('td:first-child').textContent = i + 1;
+        });
+    }
+}
+
+// 初始化
+document.addEventListener('DOMContentLoaded', loadAnonymous);
+</script>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.lp-filter { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: flex-end; }
+.lp-filter label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+.lp-filter select, .lp-filter input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+.lp-stats { display: flex; gap: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.lp-stat { flex: 1; text-align: center; padding: 10px 4px; border-right: 1px solid #f1f5f9; }
+.lp-stat:last-child { border-right: none; }
+.lp-stat .num { display: block; font-size: 20px; font-weight: 700; color: #b91c1c; }
+.lp-stat .lbl { font-size: 12px; color: var(--muted); }
+.lp-table { width: 100%; border-collapse: collapse; background: #fff; }
+.lp-table th { background: #f8fafc; font-size: 12px; color: var(--muted); text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); }
+.lp-table td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.lp-table tr:hover { background: #f8fafc; }
+.empty-state { text-align: center; padding: 40px 0; color: var(--muted); }
+</style>
+
+<div class="card">
+ <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+ <span>丢失单号</span>
+ <span style="font-size:13px; font-weight:400; color:var(--muted);">打包二次扫描发现少件时标记丢失的单号（已从打包流程剔除）</span>
+ </div>
+
+ <!-- 筛选 -->
+ <form method="get" action="/lost_packages" class="lp-filter">
+ <div>
+ <label>客户</label>
+ <select name="customer_id" onchange="this.form.submit()">
+ <option value="">全部客户</option>
+ {% for c in customers %}
+ <option value="{{ c.id }}" {{ 'selected' if f_customer == c.id else '' }}>{{ c.name }}</option>
+ {% endfor %}
+ </select>
+ </div>
+ <div>
+ <label>开始日期</label>
+ <input type="date" name="start_date" value="{{ f_start }}">
+ </div>
+ <div>
+ <label>结束日期</label>
+ <input type="date" name="end_date" value="{{ f_end }}">
+ </div>
+ <div>
+ <label>单号搜索</label>
+ <input type="text" name="tracking_number" value="{{ f_tracking }}" placeholder="输入单号片段" style="width:160px;">
+ </div>
+ <button type="submit" style="padding:6px 16px; border:1px solid #b91c1c; background:#b91c1c; color:#fff; border-radius:6px; font-size:13px; cursor:pointer;">查询</button>
+ <a href="/lost_packages" style="font-size:13px; color:#dc2626; text-decoration:none; padding-bottom:6px;">重置</a>
+ </form>
+
+ <!-- 汇总 -->
+ <div class="lp-stats">
+ <div class="lp-stat"><span class="num">{{ records|length }}</span><span class="lbl">总计</span></div>
+ <div class="lp-stat"><span class="num">{{ records|selectattr('customer_id')|list|length }}</span><span class="lbl">有主</span></div>
+ </div>
+
+ {% if records %}
+ <table class="lp-table">
+ <thead>
+ <tr>
+ <th>丢失时间</th>
+ <th>客户</th>
+ <th>扫描单号</th>
+ <th>入库时间</th>
+ <th>内容物</th>
+ <th>操作</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for r in records %}
+ <tr>
+ <td>{{ r.lost_at.strftime('%Y-%m-%d %H:%M') if r.lost_at else '-' }}</td>
+ <td><strong>{{ r.customer.name if r.customer else '无主' }}</strong></td>
+ <td><code style="background:#f0f0f0; padding:2px 6px; border-radius:4px; font-size:12px;">{{ r.tracking_number }}</code></td>
+ <td>{{ r.entry_time.strftime('%Y-%m-%d') if r.entry_time else '-' }}</td>
+ <td>
+ {% if r.customer_remark %}<span style="color:#92400e; font-size:12px;">{{ r.customer_remark }}</span>
+ {% else %}<span style="color:var(--muted); font-size:12px;">—</span>{% endif %}
+ </td>
+ <td>
+ <button class="btn btn-success btn-sm" onclick="restoreLost({{ r.id }}, '{{ r.tracking_number }}')">恢复</button>
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ {% else %}
+ <div class="empty-state"><p>暂无丢失单号记录</p></div>
+ {% endif %}
+</div>
+
+<script>
+function restoreLost(id, tracking) {
+    if (!confirm('确定恢复单号「' + tracking + '」为「已入库」状态？\n\n恢复后可重新扫描打包。')) return;
+    apiRequest('/api/inbound/restore_lost/' + id, { method:'POST' }).then(function(r) {
+        showToast(r.message || '操作成功', 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+    }).catch(function(e) {
+        showToast(e.message || '操作失败', 'error');
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>合箱标签</title>
+<style>
+    @page {
+        size: 4in {{ page_height_in }}in;
+        margin: 0;
+    }
+
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        font-family: "SimHei", "黑体", "Microsoft YaHei", sans-serif;
+        font-weight: bold;
+        background: white;
+    }
+
+    .label {
+        box-sizing: border-box;
+        width: 100%;
+        border: 2pt solid #000;
+        padding: 3mm;
+    }
+
+    .header {
+        text-align: center;
+        margin-bottom: 1mm;
+        flex-shrink: 0;
+    }
+
+    .header .type-batch {
+        font-size: 22pt;
+        font-weight: bold;
+        margin-bottom: 1mm;
+        line-height: 1.2;
+    }
+
+    .header .zip-boxno {
+        font-size: 13pt;
+        font-weight: bold;
+        line-height: 1.2;
+    }
+
+    .header .divider {
+        border: none;
+        border-top: 2pt solid #000;
+        margin: 2mm 0;
+    }
+
+    .table-wrap {
+        flex: 1;
+        overflow: hidden;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        height: 100%;
+    }
+
+    th, td {
+        border: 1pt solid #000;
+        text-align: center;
+        vertical-align: middle;
+        font-weight: bold;
+    }
+
+    th {
+        background: #e8e8e8;
+        font-size: 11pt;
+        height: 8mm;
+        line-height: 8mm;
+    }
+
+    td {
+        overflow: hidden;
+        white-space: nowrap;
+        padding: 0 1mm;
+        height: {{ row_height_mm }}mm;
+        line-height: {{ row_height_mm }}mm;
+        font-weight: bold;
+    }
+
+    /* 前两列：固定小号字体 */
+    td:nth-child(1), td:nth-child(2) {
+        font-size: 10pt;
+        text-align: center;
+    }
+
+    /* 客户列：动态大号字体 */
+    td:nth-child(3) {
+        font-size: {{ font_pt }}pt;
+    }
+
+    td:first-child {
+        padding: 0;
+    }
+
+    col:first-child {
+        width: 8%;
+    }
+
+    col:nth-child(2) {
+        width: 20%;
+    }
+
+    col:nth-child(3) {
+        width: 72%;
+    }
+
+    @media print {
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+</head>
+<body>
+<div class="label">
+    <div class="header">
+        <div class="type-batch">{{ box_type }}{{ batch_no }}</div>
+        <div class="zip-boxno">{{ zip_code }}&nbsp;&nbsp;&nbsp;&nbsp;第{{ current_box }}箱/共{{ total_boxes }}箱</div>
+        <hr class="divider">
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <colgroup>
+                <col style="width: 8%;">
+                <col style="width: 20%;">
+                <col style="width: 72%;">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>序号</th>
+                    <th>编号</th>
+                    <th>客户名</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>&#{{ 9311 + loop.index }};</td>
+                    <td>{{ item.serial_label }}</td>
+                    <td>{{ item.customer_name }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+    // 自适应字体：找最长客户名，缩小字体直到所有名字都不越界
+    (function() {
+        function autoFitFont() {
+            var tds = document.querySelectorAll('table td:nth-child(3)');
+            if (tds.length === 0) return;
+
+            // 先应用大字体看能不能全放下
+            var minPt = 8, maxPt = 18, bestPt = 14;
+            function fitsAt(pt) {
+                for (var i = 0; i < tds.length; i++) {
+                    tds[i].style.fontSize = pt + 'pt';
+                }
+                for (var i = 0; i < tds.length; i++) {
+                    if (tds[i].scrollWidth > tds[i].clientWidth) return false;
+                }
+                return true;
+            }
+
+            // 二分搜索最大能放下的字号
+            while (minPt <= maxPt) {
+                var mid = Math.floor((minPt + maxPt) / 2);
+                if (fitsAt(mid)) {
+                    bestPt = mid;
+                    minPt = mid + 1;
+                } else {
+                    maxPt = mid - 1;
+                }
+            }
+            // 应用最佳字号
+            for (var i = 0; i < tds.length; i++) {
+                tds[i].style.fontSize = bestPt + 'pt';
+            }
+            // 同步应用到序号和编号列
+            var allTds = document.querySelectorAll('table td');
+            for (var i = 0; i < allTds.length; i++) {
+                allTds[i].style.fontSize = bestPt + 'pt';
+                allTds[i].style.lineHeight = '7.5mm';
+            }
+        }
+        {% if is_pdf %}
+        // PDF模式下weasyprint不支持DOM测量，使用服务端计算的字体
+        document.querySelectorAll('table td').forEach(td => {
+            td.style.fontSize = '{{ font_pt }}pt';
+        });
+        {% else %}
+        window.onload = function() {
+            autoFitFont();
+            setTimeout(function() { window.print(); }, 400);
+        };
+        {% endif %}
+    })();
+</script>
+</body>
+</html>

@@ -1,0 +1,509 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+/* 颜色变量 */
+.vip-page { --primary: #2563eb; --accent: #3b82f6; --success: #10b981; --danger: #ef4444; --muted: #64748b; --bg-soft: #f8fafc; --border: #e2e8f0; }
+
+/* 头部 */
+.vip-header { background: #1565c0; color: #e2e8f0; padding: 18px 22px; border-radius: 10px; margin-bottom: 18px; }
+.vip-header h2 { margin: 0 0 4px 0; font-size: 18px; color: #f8fafc; font-weight: 600; }
+.vip-header p { margin: 0; font-size: 13px; color: #94a3b8; }
+.vip-header .header-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* 按钮系统 */
+.btn-vip { padding: 7px 14px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border); background: #fff; color: var(--primary); cursor: pointer; transition: all .15s; font-weight: 500; }
+.btn-vip:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.btn-vip.primary { background: #1565c0; color: #fff; border-color: #1565c0; }
+.btn-vip.primary:hover { background: #0d47a1; }
+.btn-vip.accent { background: #1565c0; color: #fff; border-color: #1565c0; }
+.btn-vip.accent:hover { background: #0d47a1; }
+.btn-vip.success { background: var(--success); color: #fff; border-color: var(--success); cursor: default; opacity: 0.95; }
+.btn-vip.danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+.btn-vip.danger:hover { background: #fef2f2; }
+
+/* 客户分组 */
+.customer-group { margin-bottom: 18px; }
+.customer-name { font-size: 15px; font-weight: 600; padding: 11px 16px; background: #fff; border: 1px solid var(--border); border-left: 4px solid #1565c0; border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+.customer-name .meta { font-size: 12px; font-weight: 400; color: var(--muted); }
+.customer-name .actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
+
+/* 包裹卡片 */
+.pack-card { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; transition: all .15s; }
+.pack-card:hover { background: #fff; box-shadow: 0 2px 6px rgba(30,41,59,0.06); }
+.pack-nature { padding: 3px 9px; border-radius: 4px; font-size: 11px; font-weight: 600; flex-shrink: 0; min-width: 38px; text-align: center; }
+.nature-pu { background: #d1fae5; color: #047857; }
+.nature-min { background: #fee2e2; color: #b91c1c; }
+.pack-info { flex: 1; min-width: 0; }
+.pack-info .line { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.pack-info .label { color: #94a3b8; }
+.pack-info .contents { font-size: 13px; color: var(--primary); font-weight: 500; margin: 4px 0 6px; }
+.pack-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* 进度面板 */
+.progress-panel { display: none; margin-top: 10px; padding: 12px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; }
+.progress-bar-wrap { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+.progress-bar-fill { width: 0; height: 100%; background: var(--accent); transition: width .3s; border-radius: 3px; }
+.progress-log { font-size: 12px; color: var(--muted); line-height: 1.8; max-height: 200px; overflow-y: auto; margin-top: 8px; }
+
+/* 尺寸编辑弹窗 */
+.edit-dims-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; align-items: center; justify-content: center; }
+.edit-dims-box { background: #fff; border-radius: 10px; padding: 24px; width: 380px; max-width: 90%; }
+.edit-dims-box h3 { margin: 0 0 16px 0; }
+.dim-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+.dim-row label { width: 50px; font-size: 13px; flex-shrink: 0; }
+.dim-row input { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; width: 80px; }
+.dim-row span { font-size: 12px; color: #9ca3af; flex-shrink: 0; }
+
+/* ===== P0 新增：筛选栏 ===== */
+.vip-filter { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+.filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.filter-row:last-child { margin-bottom: 0; }
+.filter-label { font-size: 13px; color: var(--muted); font-weight: 500; }
+.filter-tab { padding: 4px 14px; border-radius: 14px; font-size: 13px; border: 1px solid var(--border); color: var(--muted); text-decoration: none; }
+.filter-tab:hover { background: #f1f5f9; }
+.filter-tab.active { background: #1565c0; color: #fff; border-color: #1565c0; font-weight: 600; }
+.vip-filter select, .vip-filter input[type="date"] { padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+.filter-reset { font-size: 13px; color: var(--danger); text-decoration: none; margin-left: 10px; }
+.filter-reset:hover { text-decoration: underline; }
+/* 汇总栏 */
+.vip-summary { display: flex; gap: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.sum-item { flex: 1; text-align: center; padding: 10px 4px; border-right: 1px solid #f1f5f9; }
+.sum-item:last-child { border-right: none; }
+.sum-num { display: block; font-size: 20px; font-weight: 700; color: #0d2b52; }
+.sum-shipped { color: #047857; }
+.sum-completed { color: #1565c0; }
+.sum-pending { color: #b45309; }
+.sum-label { font-size: 12px; color: var(--muted); }
+/* 折叠 */
+.fold-arrow { font-size: 10px; color: var(--muted); transition: transform .15s; }
+.customer-group.collapsed .fold-arrow { transform: rotate(-90deg); }
+.customer-group.collapsed .customer-packs { display: none; }
+/* 批量操作栏 */
+.vip-batchbar { display: flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; flex-wrap: wrap; }
+.vip-batchbar .btn-vip { margin-left: 8px; }
+</style>
+
+<div class="vip-header">
+<h2>VIP 单独发货记录</h2>
+<p>这些包裹已标记为单独发货，自动合箱完成。每位客户独立出票，不经过批次管理。</p>
+<div class="header-actions">
+<button class="btn-vip primary" onclick="exportVipDimensions()">导出全部尺寸信息</button>
+</div>
+</div>
+
+<!-- 筛选栏 -->
+<div class="vip-filter">
+<form method="get" action="/vip/packed" id="vip-filter-form">
+<div class="filter-row">
+<span class="filter-label">状态：</span>
+<a class="filter-tab {{ 'active' if f_status == 'pending' else '' }}" href="/vip/packed?status=pending&customer={{ f_customer or '' }}&start={{ f_start }}&end={{ f_end }}&q={{ f_q }}">待处理</a>
+<a class="filter-tab {{ 'active' if f_status == 'completed' else '' }}" href="/vip/packed?status=completed&customer={{ f_customer or '' }}&start={{ f_start }}&end={{ f_end }}&q={{ f_q }}">已完成</a>
+<a class="filter-tab {{ 'active' if f_status == 'shipped' else '' }}" href="/vip/packed?status=shipped&customer={{ f_customer or '' }}&start={{ f_start }}&end={{ f_end }}&q={{ f_q }}">已发货</a>
+</div>
+<div class="filter-row">
+<span class="filter-label">客户：</span>
+<select name="customer" onchange="this.form.submit()">
+<option value="">全部客户</option>
+{% for c in vip_customers %}
+<option value="{{ c.id }}" {{ 'selected' if f_customer == c.id else '' }}>{{ c.name }}</option>
+{% endfor %}
+</select>
+<span class="filter-label" style="margin-left:14px;">搜索：</span>
+<input type="text" name="q" value="{{ f_q }}" placeholder="输入客户名搜索…" style="width:160px; padding:4px 8px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;">
+<button type="submit" style="padding:4px 12px; border:1px solid #1565c0; background:#1565c0; color:#fff; border-radius:6px; font-size:13px; cursor:pointer;">搜索</button>
+<span class="filter-label" style="margin-left:14px;">日期：</span>
+<input type="date" name="start" value="{{ f_start }}" onchange="this.form.submit()">
+<span style="color:#94a3b8;">~</span>
+<input type="date" name="end" value="{{ f_end }}" onchange="this.form.submit()">
+<a class="filter-reset" href="/vip/packed">重置</a>
+</div>
+</form>
+</div>
+
+<!-- 批量操作栏 -->
+<div class="vip-batchbar" id="vip-batchbar">
+<span class="filter-label">批量操作：</span>
+<label style="font-size:13px; display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+<input type="checkbox" id="check-all" onchange="toggleSelectAll(this)" style="accent-color:#1565c0;"> 全选
+</label>
+<span class="batch-info" id="batch-info" style="font-size:13px; color:var(--muted); margin-left:6px;">已选 0 条</span>
+{% if f_status == 'pending' %}
+<button class="btn-vip primary" onclick="batchComplete()" style="margin-left:12px;">批量完成</button>
+{% elif f_status == 'completed' %}
+<button class="btn-vip accent" onclick="batchShip()" style="margin-left:12px;">批量发货</button>
+{% elif f_status == 'shipped' %}
+<button class="btn-vip danger" onclick="batchUnship()" style="margin-left:12px;">批量撤销发货</button>
+{% endif %}
+</div>
+
+<!-- 汇总栏 -->
+<div class="vip-summary">
+<div class="sum-item"><span class="sum-num">{{ stats.customers }}</span><span class="sum-label">客户数</span></div>
+<div class="sum-item"><span class="sum-num">{{ stats.total }}</span><span class="sum-label">包裹数</span></div>
+<div class="sum-item"><span class="sum-num sum-pending">{{ stats.pending }}</span><span class="sum-label">待处理</span></div>
+<div class="sum-item"><span class="sum-num sum-completed">{{ stats.completed }}</span><span class="sum-label">已完成</span></div>
+<div class="sum-item"><span class="sum-num sum-shipped">{{ stats.shipped }}</span><span class="sum-label">已发货</span></div>
+<div class="sum-item"><span class="sum-num">{{ '%.1f'|format(stats.weight) }}kg</span><span class="sum-label">总重量</span></div>
+</div>
+
+{% if packs %}
+{% set grouped = packs|groupby('customer_id') %}
+{% for customer_id, group in grouped %}
+{% set customer = customers_map.get(customer_id) %}
+{% if customer %}
+<div class="customer-group collapsed">
+<div class="customer-name" onclick="toggleCustomerGroup('cust-{{ customer.id }}', this)" style="cursor:pointer;">
+<span class="fold-arrow">▼</span>
+{{ customer.name }}
+<span class="meta">{{ customer.zip_code or '' }} {{ customer.address[:30] if customer.address else '' }}</span>
+<div class="actions" onclick="event.stopPropagation()">
+<button class="btn-vip" onclick="exportVipCustomerDimensions({{ customer.id }}, '{{ customer.name|e }}')">尺寸</button>
+<button class="btn-vip" onclick="window.location.href='/export/vip_shipping_detail/{{ customer.id }}'">发货明细</button>
+<button class="btn-vip" onclick="window.location.href='/export/vip_billing_detail/{{ customer.id }}'">计费表</button>
+<button class="btn-vip accent" onclick="generateVipCustomerInvoice({{ customer.id }})">生成发票</button>
+</div>
+</div>
+<div class="customer-packs" id="cust-{{ customer.id }}">
+
+{% for pack in group %}
+<div class="pack-card" id="pack-{{ pack.id }}">
+<input type="checkbox" class="pack-check" data-id="{{ pack.id }}" onchange="updateBatchInfo()" style="accent-color:#1565c0; flex-shrink:0;">
+<span class="pack-nature {{ 'nature-pu' if pack.nature == '普' else 'nature-min' }}">{{ '普货' if pack.nature == '普' else '敏货' }}</span>
+<div class="pack-info">
+<div class="line"><span class="label">包裹：</span>{{ pack.serial_label.split('#')[0] if '#' in (pack.serial_label or '') else (pack.serial_label or '') }}<span class="label" style="margin-left:12px;">箱号：</span>{{ carton_map.get(pack.id).name if carton_map.get(pack.id) else '待合箱' }}</div>
+{% if pack.contents_description %}
+<div class="contents">{{ pack.contents_description }}</div>
+{% endif %}
+<div class="line"><span class="label">重：</span><span id="dim-weight-{{ pack.id }}">{{ pack.weight or 0 }}</span>kg<span class="label" style="margin-left:10px;">尺寸：</span><span id="dim-lwh-{{ pack.id }}">{{ pack.length or 0 }}×{{ pack.width or 0 }}×{{ pack.height or 0 }}</span>cm<span class="label" style="margin-left:10px;">创建：</span>{{ pack.created_at.strftime('%m-%d %H:%M') if pack.created_at else '' }}<span class="label" style="margin-left:10px;">发货：</span>{% if pack.shipped_at %}<span style="color:#047857;font-weight:600;">{{ pack.shipped_at.strftime('%m-%d %H:%M') }}</span>{% else %}<span style="color:#b45309;">未记录</span>{% endif %}</div>
+</div>
+<div class="pack-actions">
+{% if f_status == 'shipped' %}
+<button class="btn-vip success" disabled>已发货</button>
+<button class="btn-vip danger" onclick="unshipVipPacked({{ pack.id }})">回退</button>
+{% elif f_status == 'completed' %}
+<button class="btn-vip accent" onclick="shipVipPacked({{ pack.id }})">发货</button>
+<button class="btn-vip" onclick="editDimensions({{ pack.id }}, {{ pack.weight or 0 }}, {{ pack.length or 0 }}, {{ pack.width or 0 }}, {{ pack.height or 0 }})">尺寸</button>
+<button class="btn-vip" onclick="window.open('/print_packed_label/{{ pack.id }}', '_blank')">标签</button>
+<button class="btn-vip danger" onclick="rollbackVipPacked({{ pack.id }})">回退</button>
+{% else %}
+<button class="btn-vip primary" onclick="completeVipPacked({{ pack.id }})">完成</button>
+<button class="btn-vip" onclick="editDimensions({{ pack.id }}, {{ pack.weight or 0 }}, {{ pack.length or 0 }}, {{ pack.width or 0 }}, {{ pack.height or 0 }})">尺寸</button>
+<button class="btn-vip" onclick="window.open('/print_packed_label/{{ pack.id }}', '_blank')">标签</button>
+<button class="btn-vip danger" onclick="rollbackVipPacked({{ pack.id }})">回退</button>
+{% endif %}
+</div>
+</div>
+{% endfor %}
+<!-- 发票生成进度（客户级） -->
+<div class="progress-panel" id="progress-cust-{{ customer.id }}">
+<div class="progress-log" id="progress-log-cust-{{ customer.id }}"></div>
+<div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar-cust-{{ customer.id }}"></div></div>
+</div>
+</div><!-- /customer-packs -->
+</div>
+{% endif %}
+{% endfor %}
+{% else %}
+<div class="empty-state"><p>暂无VIP单独发货记录</p></div>
+{% endif %}
+
+<!-- 尺寸编辑弹窗 -->
+<div class="edit-dims-overlay" id="edit-dims-overlay" onclick="if(event.target===this)closeEditDims()">
+<div class="edit-dims-box">
+<h3>编辑箱子尺寸</h3>
+<div class="dim-row"><label>重量</label><input type="number" id="edit-weight" step="0.01" min="0" onkeydown="handleDimKey(event, 'weight')"><span>kg</span></div>
+<div class="dim-row"><label>长</label><input type="number" id="edit-length" step="0.1" min="0" onkeydown="handleDimKey(event, 'length')"><span>cm</span></div>
+<div class="dim-row"><label>宽</label><input type="number" id="edit-width" step="0.1" min="0" onkeydown="handleDimKey(event, 'width')"><span>cm</span></div>
+<div class="dim-row"><label>高</label><input type="number" id="edit-height" step="0.1" min="0" onkeydown="handleDimKey(event, 'height')"><span>cm</span></div>
+<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+<button class="btn-vip" onclick="closeEditDims()">取消</button>
+<button class="btn-vip primary" onclick="saveDimensions()">保存</button>
+</div>
+</div>
+</div>
+
+<script>
+var _editPackedId = null;
+
+/* 客户组折叠/展开 */
+function toggleCustomerGroup(groupId, headerEl) {
+    var group = document.getElementById(groupId);
+    if (!group) return;
+    var parent = group.closest('.customer-group');
+    if (parent) parent.classList.toggle('collapsed');
+}
+
+function editDimensions(packId, weight, length, width, height) {
+    _editPackedId = packId;
+    document.getElementById('edit-weight').value = weight || 0;
+    document.getElementById('edit-length').value = length || 0;
+    document.getElementById('edit-width').value = width || 0;
+    document.getElementById('edit-height').value = height || 0;
+    document.getElementById('edit-dims-overlay').style.display = 'flex';
+    // 自动聚焦到重量输入框
+    setTimeout(function() {
+        const w = document.getElementById('edit-weight');
+        w.focus();
+        w.select();
+    }, 50);
+}
+
+function closeEditDims() {
+    document.getElementById('edit-dims-overlay').style.display = 'none';
+    _editPackedId = null;
+}
+
+const DIM_FIELDS = ['weight', 'length', 'width', 'height'];
+
+function handleDimKey(e, currentField) {
+    const idx = DIM_FIELDS.indexOf(currentField);
+    // Enter 保存
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        saveDimensions();
+        return;
+    }
+    // Esc 取消
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        closeEditDims();
+        return;
+    }
+    // ↑↓ 焦点跳转（上一个/下一个字段）
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const nextIdx = (idx - 1 + DIM_FIELDS.length) % DIM_FIELDS.length;
+        const el = document.getElementById('edit-' + DIM_FIELDS[nextIdx]);
+        if (el) { el.focus(); el.select(); }
+        return;
+    }
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIdx = (idx + 1) % DIM_FIELDS.length;
+        const el = document.getElementById('edit-' + DIM_FIELDS[nextIdx]);
+        if (el) { el.focus(); el.select(); }
+        return;
+    }
+    // Tab / Shift+Tab 焦点跳转
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        let nextIdx;
+        if (e.shiftKey) {
+            nextIdx = (idx - 1 + DIM_FIELDS.length) % DIM_FIELDS.length;
+        } else {
+            nextIdx = (idx + 1) % DIM_FIELDS.length;
+        }
+        const el = document.getElementById('edit-' + DIM_FIELDS[nextIdx]);
+        if (el) {
+            el.focus();
+            el.select();
+        }
+    }
+}
+
+async function saveDimensions() {
+    if (!_editPackedId) return;
+    const w = parseFloat(document.getElementById('edit-weight').value) || 0;
+    const l = parseFloat(document.getElementById('edit-length').value) || 0;
+    const wi = parseFloat(document.getElementById('edit-width').value) || 0;
+    const h = parseFloat(document.getElementById('edit-height').value) || 0;
+
+    try {
+        await apiRequest('/api/vip/packed/' + _editPackedId + '/update_dimensions', {
+            method: 'POST',
+            body: JSON.stringify({ weight: w, length: l, width: wi, height: h })
+        });
+        document.getElementById('dim-weight-' + _editPackedId).textContent = w;
+        document.getElementById('dim-lwh-' + _editPackedId).textContent = l + '×' + wi + '×' + h;
+        showToast('尺寸已更新', 'success');
+        closeEditDims();
+    } catch(e) {
+        showToast(e.message || '更新失败', 'error');
+    }
+}
+
+function completeVipPacked(packId) {
+    var msg = '确定确认该 VIP 包裹「完成」？\n\n完成后即可导出账单/明细/发票；如需发货请到「已完成」视图操作。';
+    if (!confirm(msg)) return;
+    if (isActionLocked()) return;
+    lockAction();
+    apiRequest('/api/vip/packed/' + packId + '/complete', { method:'POST' }).then(function(r) {
+        showToast(r.message || '操作成功', 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+    }).catch(function(e) {
+        showToast(e.message || '操作失败', 'error');
+    }).finally(function() {
+        unlockAction();
+    });
+}
+
+function unshipVipPacked(packId) {
+    if (!confirm('确定撤销该 VIP 包裹的发货？\n\n撤销后记录回到「已完成」状态（发货时间将被清空），可重新导出账单/发票。')) return;
+    if (isActionLocked()) return;
+    lockAction();
+    apiRequest('/api/vip/packed/' + packId + '/unship', { method:'POST' }).then(function(r) {
+        showToast(r.message || '操作成功', 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+    }).catch(function(e) {
+        showToast(e.message || '操作失败', 'error');
+    }).finally(function() {
+        unlockAction();
+    });
+}
+
+function getSelectedIds() {
+    var ids = [];
+    document.querySelectorAll('.pack-check:checked').forEach(function(cb) {
+        ids.push(parseInt(cb.getAttribute('data-id'), 10));
+    });
+    return ids;
+}
+
+function updateBatchInfo() {
+    var n = getSelectedIds().length;
+    document.getElementById('batch-info').textContent = '已选 ' + n + ' 条';
+}
+
+function toggleSelectAll(el) {
+    document.querySelectorAll('.pack-check').forEach(function(cb) {
+        cb.checked = el.checked;
+    });
+    updateBatchInfo();
+}
+
+function batchComplete() {
+    var ids = getSelectedIds();
+    if (!ids.length) { showToast('请先勾选要操作的记录', 'error'); return; }
+    if (!confirm('确定批量完成所选 ' + ids.length + ' 条记录？\n\n完成后即可导出账单/明细/发票。')) return;
+    if (isActionLocked()) return;
+    lockAction();
+    apiRequest('/api/vip/packed/batch_complete', { method:'POST', body: JSON.stringify({ packed_ids: ids }) }).then(function(r) {
+        showToast(r.message || '批量完成成功', 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+    }).catch(function(e) {
+        showToast(e.message || '操作失败', 'error');
+    }).finally(function() {
+        unlockAction();
+    });
+}
+
+function batchShip() {
+    var ids = getSelectedIds();
+    if (!ids.length) { showToast('请先勾选要操作的记录', 'error'); return; }
+    if (!confirm('确定批量发货所选 ' + ids.length + ' 条记录？\n\n发货后记录将归档到「已发货」。')) return;
+    if (isActionLocked()) return;
+    lockAction();
+    apiRequest('/api/vip/packed/batch_ship', { method:'POST', body: JSON.stringify({ packed_ids: ids }) }).then(function(r) {
+        showToast(r.message || '批量发货成功', 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+    }).catch(function(e) {
+        showToast(e.message || '操作失败', 'error');
+    }).finally(function() {
+        unlockAction();
+    });
+}
+
+function batchUnship() {
+    var ids = getSelectedIds();
+    if (!ids.length) { showToast('请先勾选要操作的记录', 'error'); return; }
+    if (!confirm('确定批量撤销发货所选 ' + ids.length + ' 条记录？\n\n撤销后回到「已完成」状态，发货时间将被清空。')) return;
+    if (isActionLocked()) return;
+    lockAction();
+    apiRequest('/api/vip/packed/batch_unship', { method:'POST', body: JSON.stringify({ packed_ids: ids }) }).then(function(r) {
+        showToast(r.message || '批量撤销成功', 'success');
+        setTimeout(function(){ window.location.reload(); }, 600);
+    }).catch(function(e) {
+        showToast(e.message || '操作失败', 'error');
+    }).finally(function() {
+        unlockAction();
+    });
+}
+
+function shipVipPacked(packId) {
+ if (!confirm('确定标记此 VIP 包裹为已发货？\n\n发货后包裹将从待处理/已完成列表隐藏，可在「已发货」归档中查询。')) return;
+ if (isActionLocked()) return;
+ lockAction();
+ apiRequest('/api/vip/packed/' + packId + '/ship', { method:'POST' }).then(function(r) {
+ showToast(r.message || '发货成功', 'success');
+ setTimeout(function(){ window.location.reload(); }, 600);
+ }).catch(function(e) {
+ showToast(e.message || '发货失败', 'error');
+ }).finally(function() {
+ unlockAction();
+ });
+}
+
+function rollbackVipPacked(packId) {
+ if (!confirm('确定回退该 VIP 单独打包？\n\n回退后包裹会恢复到待打包状态，对应的箱子和明细会被删除。')) return;
+ if (isActionLocked()) return;
+ lockAction();
+ apiRequest('/api/vip/packed/' + packId + '/rollback', { method:'POST' }).then(function(r) {
+ showToast(r.message || '回退成功', 'success');
+ setTimeout(function(){ window.location.reload(); }, 200);
+ }).catch(function(e) {
+ showToast(e.message || '回退失败', 'error');
+ }).finally(function() {
+ unlockAction();
+ });
+}
+
+function exportVipDimensions() {
+    if (isActionLocked()) return;
+    lockAction();
+    window.location.href = '/export/vip_dimensions';
+    setTimeout(function(){ unlockAction(); }, 1500);
+}
+
+function exportVipCustomerDimensions(customerId, customerName) {
+    if (isActionLocked()) return;
+    lockAction();
+    showToast('正在导出 ' + customerName + ' 的尺寸信息...', 'info');
+    window.location.href = '/export/vip_dimensions/customer/' + customerId;
+    setTimeout(function(){ unlockAction(); }, 1500);
+}
+
+function generateVipCustomerInvoice(customerId) {
+    const progressKey = 'cust-' + customerId;
+    const panel = document.getElementById('progress-' + progressKey);
+    const log = document.getElementById('progress-log-' + progressKey);
+    const bar = document.getElementById('progress-bar-' + progressKey);
+    if (!panel || !log || !bar) return;
+
+    panel.style.display = 'block';
+    log.innerHTML = '<div>🔗 连接中...</div>';
+    bar.style.width = '3%';
+
+    let step = 0;
+    const evt = new EventSource('/api/vip/packed/customer/' + customerId + '/invoice');
+    evt.onmessage = function(e) {
+        const d = JSON.parse(e.data);
+        if (d.status === 'progress') {
+            step++;
+            bar.style.width = Math.min(3 + step * 3, 95) + '%';
+            log.innerHTML += '<div>• ' + d.message + '</div>';
+            log.scrollTop = log.scrollHeight;
+        } else if (d.status === 'done') {
+            bar.style.width = '100%';
+            log.innerHTML += '<div style="color:#16a34a;font-weight:bold;">✅ 完成!</div>';
+            d.files.forEach(f => {
+                const name = f.split('/').pop().split('\\').pop();
+                log.innerHTML += '<div><a href="/download_invoice?path=' + encodeURIComponent(f) + '" style="color:#4527a0;">📄 ' + name + '</a></div>';
+            });
+            evt.close();
+            setTimeout(() => { panel.classList.remove('active'); bar.style.background=''; bar.style.width='0%'; }, 3000);
+        } else if (d.status === 'error') {
+            bar.style.width = '100%';
+            bar.style.background = '#dc2626';
+            log.innerHTML += '<div style="color:#dc2626;">' + d.message + '</div>';
+            evt.close();
+            setTimeout(() => { panel.classList.remove('active'); bar.style.background=''; bar.style.width='0%'; }, 5000);
+        }
+    };
+    evt.onerror = function() {
+        log.innerHTML += '<div style="color:#dc2626;">连接中断（请重试）</div>';
+        evt.close();
+        setTimeout(() => { panel.classList.remove('active'); bar.style.background=''; bar.style.width='0%'; }, 5000);
+    };
+}
+</script>
+{% endblock %}

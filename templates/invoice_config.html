@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">发票生成配置</div>
+
+    <!-- API Key -->
+    <div class="form-group">
+        <label>DeepSeek API Key</label>
+        <input type="text" id="api-key" value="{{ api_key }}" placeholder="sk-..." style="width: 100%;">
+        <small style="color: var(--text-secondary);">用于 AI 补全品名信息、翻译和 HS 编码查询</small>
+    </div>
+
+    <!-- 图片文件夹（固定） -->
+    <div class="form-group">
+        <label>图片文件夹</label>
+        <input type="text" value="/opt/images" readonly style="width: 100%; background: var(--bg-input); color: var(--text-secondary);">
+        <small style="color: var(--text-secondary);">已索引 <span id="image-count">--</span> 张图片 | 
+            <a href="#" onclick="reindexImages()" style="color: var(--accent-hover);">重建索引</a>
+        </small>
+    </div>
+
+    <!-- 模板文件夹（固定） -->
+    <div class="form-group">
+        <label>发票模板</label>
+        <input type="text" value="/opt/invoice_templates（按邮编自动匹配，未匹配到默认用91755）" readonly style="width: 100%; background: var(--bg-input); color: var(--text-secondary); font-size: 13px;">
+    </div>
+
+    <div style="margin-top: 20px;">
+        <button class="btn" onclick="saveConfig()"> 保存配置</button>
+    </div>
+
+    <hr style="margin: 25px 0; border-color: var(--border);">
+
+    <!-- 生成发票 -->
+    <div class="card-title" style="font-size: 16px;">生成发票</div>
+    <div style="display: flex; gap: 15px; align-items: flex-end;">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>选择批次</label>
+            <select id="batch-select" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; min-width: 220px;">
+                <option value="">-- 请选择 --</option>
+                {% for b in batches %}
+                <option value="{{ b.id }}">{{ b.batch_no }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>发票类型</label>
+            <select id="invoice-type" style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; min-width: 120px;">
+                <option value="all">普货 + 敏货</option>
+                <option value="puhuo">仅普货</option>
+                <option value="minhuo">仅敏货</option>
+            </select>
+        </div>
+        <button class="btn" onclick="generateInvoice()" style="background: #1565c0; color: white;"> 生成发票</button>
+    </div>
+
+    <!-- 进度日志 -->
+    <div id="progress-panel" style="display: none; margin-top: 20px; padding: 15px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;">
+        <div style="font-weight: 600; margin-bottom: 10px;"> 生成进度</div>
+        <div style="width: 100%; height: 8px; background: var(--border); border-radius: 4px; margin-bottom: 12px; overflow: hidden;">
+            <div id="progress-bar" style="width: 0%; height: 100%; background: #1565c0; transition: width 0.3s; border-radius: 4px;"></div>
+        </div>
+        <div id="progress-log" style="font-size: 13px; color: var(--text-secondary); line-height: 1.8; max-height: 300px; overflow-y: auto;"></div>
+    </div>
+    <div id="result-panel" style="display: none; margin-top: 15px;"></div>
+</div>
+
+<script>
+async function saveConfig() {
+    const data = {
+        deepseek_api_key: document.getElementById('api-key').value,
+    };
+    try {
+        await apiRequest('/api/invoice/config', { method: 'POST', body: JSON.stringify(data) });
+        showToast('配置已保存', 'success');
+    } catch (e) {}
+}
+
+async function indexImages() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = ' 索引中...';
+    document.getElementById('image-count').textContent = '扫描中...';
+    try {
+        const r = await apiRequest('/api/invoice/index_images', { method: 'POST' });
+        document.getElementById('image-count').textContent = r.count + ' 张图片';
+        showToast(r.message, 'success');
+    } catch (e) {
+        showToast(e.message || '索引失败', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = ' 扫描建立索引';
+    }
+}
+
+async function reindexImages() {
+    event.preventDefault();
+    if (!confirm('将重新扫描 /opt/images 下所有图片建索引，确认？')) return;
+    document.getElementById('image-count').textContent = '扫描中...';
+    try {
+        const r = await apiRequest('/api/invoice/index_images', { method: 'POST' });
+        document.getElementById('image-count').textContent = r.count + ' 张图片';
+        showToast(r.message, 'success');
+    } catch (e) {
+        showToast(e.message || '失败', 'error');
+    }
+}
+
+function generateInvoice() {
+    const batchId = document.getElementById('batch-select').value;
+    if (!batchId) {
+        showToast('请选择批次', 'error');
+        return;
+    }
+    const invoiceType = document.getElementById('invoice-type').value;
+    const panel = document.getElementById('progress-panel');
+    const log = document.getElementById('progress-log');
+    const result = document.getElementById('result-panel');
+    const bar = document.getElementById('progress-bar');
+    panel.style.display = 'block';
+    log.innerHTML = '<div>正在连接服务器...</div>';
+    result.style.display = 'none';
+    bar.style.width = '5%';
+
+    let step = 0;
+    const evt = new EventSource('/api/invoice/generate/' + batchId + '?type=' + invoiceType);
+    evt.onmessage = function(e) {
+        const d = JSON.parse(e.data);
+        if (d.status === 'progress') {
+            step++;
+            const pct = Math.min(3 + step * 3, 95);
+            bar.style.width = pct + '%';
+            log.innerHTML += '<div>• ' + d.message + '</div>';
+            log.scrollTop = log.scrollHeight;
+        } else if (d.status === 'done') {
+            bar.style.width = '100%';
+            log.innerHTML += '<div style="color: #16a34a; font-weight: bold;"> 完成！</div>';
+            let html = '<div style="font-weight: 600; margin-bottom: 8px;"> 下载文件：</div>';
+            d.files.forEach(f => {
+                const name = f.split('/').pop().split('\\').pop();
+                html += `<div><a href="/download_invoice?path=${encodeURIComponent(f)}" style="color: var(--accent-hover);">${name}</a></div>`;
+            });
+            result.innerHTML = html;
+            result.style.display = 'block';
+            evt.close();
+        } else if (d.status === 'error') {
+            bar.style.width = '100%';
+            bar.style.background = '#dc2626';
+            log.innerHTML += '<div style="color: #dc2626;">' + d.message + '</div>';
+            evt.close();
+        } else if (d.status === 'ping') {
+            // keep-alive
+        }
+    };
+    evt.onerror = function() {
+        log.innerHTML += '<div style="color: #dc2626;">连接中断，请刷新重试</div>';
+        evt.close();
+    };
+}
+
+// 页面加载时查图片索引数
+document.addEventListener('DOMContentLoaded', function() {
+    apiRequest('/api/invoice/image_count').then(r => {
+        if (r.count > 0) {
+            document.getElementById('image-count').textContent = r.count + ' 张已索引';
+        }
+    }).catch(() => {});
+});
+</script>
+{% endblock %}
